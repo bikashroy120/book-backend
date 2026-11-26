@@ -1,6 +1,7 @@
 import { plainToInstance, Type } from 'class-transformer';
 import {
   IsInt,
+  Matches,
   IsNotEmpty,
   IsString,
   IsUrl,
@@ -31,6 +32,7 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[1-9]\d*[smhd]$/)
   ACCESS_TOKEN_EXPIRES = '15m';
 
   @IsString()
@@ -39,6 +41,7 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[1-9]\d*[smhd]$/)
   REFRESH_TOKEN_EXPIRES = '7d';
 
   @IsString()

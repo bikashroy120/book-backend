@@ -1,17 +1,84 @@
+import { ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { UserRole } from '@prisma/client';
+import { TokenType, UserRole, UserStatus } from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import * as bcrypt from 'bcrypt';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
 import { TransformInterceptor } from '../src/common/interceptor/transform.interceptor';
 import { rm } from 'node:fs/promises';
+import { sha256 } from '../src/common/utils/crypto';
+import { MailService } from '../src/core/mail/mail.service';
+import type { MailMessage } from '../src/core/mail/mail.types';
+
+type LoginTestUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatarUrl: string | null;
+  language: string;
+  password: string;
+  status: UserStatus;
+};
+type StoredToken = {
+  id: string;
+  userId: string;
+  type: TokenType;
+  expiresAt: Date;
+};
 
 describe('AppController (e2e)', () => {
   let app: NestExpressApplication<App>;
   let uploadDirectory: string;
+  let loginUser: LoginTestUser | null = null;
+  let storedToken: StoredToken | null = null;
+  let createdUserToken: string | undefined;
+  let createdResetToken: string | undefined;
+  let passwordHash: string;
+  const sentMails: MailMessage[] = [];
+  const registrationUser = {
+    id: 'registered-user',
+    name: 'New Reader',
+    email: 'reader@example.com',
+    phone: '01712345678',
+    role: UserRole.USER,
+    avatarUrl: null,
+    language: 'bn',
+  };
+  const transactionMock = {
+    user: {
+      create: () => Promise.resolve(registrationUser),
+      update: () => Promise.resolve({}),
+    },
+    verificationToken: {
+      create: (input: { data: { token: string } }) => {
+        createdUserToken = input.data.token;
+        return Promise.resolve({});
+      },
+      deleteMany: () => Promise.resolve({ count: 1 }),
+    },
+  };
+  const prismaMock = {
+    user: {
+      findUnique: () => Promise.resolve(loginUser),
+      update: () => Promise.resolve({}),
+    },
+    verificationToken: {
+      create: (input: { data: { token: string } }) => {
+        createdResetToken = input.data.token;
+        return Promise.resolve({});
+      },
+      findUnique: () => Promise.resolve(storedToken),
+      delete: () => Promise.resolve({}),
+    },
+    $transaction: <T>(
+      callback: (transaction: typeof transactionMock) => Promise<T>,
+    ) => callback(transactionMock),
+  };
 
   beforeAll(async () => {
     const configuredUploadDirectory = process.env.UPLOAD_DIR;
@@ -19,17 +86,32 @@ describe('AppController (e2e)', () => {
       throw new Error('E2E upload directory is not configured');
     }
     uploadDirectory = configuredUploadDirectory;
+    passwordHash = await bcrypt.hash('CorrectHorse9', 4);
 
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue({})
+      .useValue(prismaMock)
+      .overrideProvider(MailService)
+      .useValue({
+        sendMail: (message: MailMessage) => {
+          sentMails.push(message);
+          return Promise.resolve();
+        },
+      })
       .compile();
 
     app = moduleFixture.createNestApplication<NestExpressApplication<App>>();
     app.setGlobalPrefix('api/v1');
     app.useStaticAssets(uploadDirectory, { prefix: '/uploads/' });
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     app.useGlobalInterceptors(new TransformInterceptor());
     await app.init();
   });
@@ -55,6 +137,213 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .post('/api/v1/uploads/image')
       .expect(401);
+  });
+
+  it('validates Bangladesh phone numbers and password complexity at registration', () => {
+    return request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        name: 'Test User',
+        email: 'test@example.com',
+        phone: '01234567890',
+        password: 'weak',
+      })
+      .expect(400);
+  });
+
+  it('registers a reader, stores a hashed verification token, and omits the password', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        name: ' New Reader ',
+        email: ' READER@example.com ',
+        phone: '01712345678',
+        password: 'ReaderPassword9',
+      })
+      .expect(201);
+
+    expect(response.text).toContain('"name":"New Reader"');
+    expect(response.text).toContain('"phone":"01712345678"');
+    expect(response.text).not.toContain('"password"');
+    expect(createdUserToken).toBeDefined();
+    const rawToken = /token=([a-f0-9]{64})/.exec(sentMails[0].html)?.[1];
+    expect(rawToken).toBeDefined();
+    expect(createdUserToken).toBe(sha256(rawToken ?? ''));
+  });
+
+  it('logs in and does not return the password hash', async () => {
+    loginUser = {
+      id: 'test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      role: UserRole.USER,
+      avatarUrl: null,
+      language: 'bn',
+      password: passwordHash,
+      status: UserStatus.ACTIVE,
+    };
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'TEST@example.com', password: 'CorrectHorse9' })
+      .expect(201);
+
+    expect(response.text).toMatch(/"accessToken":"[^"]+"/);
+    expect(response.text).toMatch(/"refreshToken":"[^"]+"/);
+    expect(response.text).toContain('"name":"Test User"');
+    expect(response.text).toContain('"role":"USER"');
+    expect(response.text).not.toContain(passwordHash);
+  });
+
+  it('uses the same unauthorized response for unknown users and wrong passwords', async () => {
+    loginUser = {
+      id: 'test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      role: UserRole.USER,
+      avatarUrl: null,
+      language: 'bn',
+      password: passwordHash,
+      status: UserStatus.ACTIVE,
+    };
+    const wrongPassword = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'test@example.com', password: 'Incorrect9' })
+      .expect(401);
+
+    loginUser = null;
+    const unknownUser = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'absent@example.com', password: 'Incorrect9' })
+      .expect(401);
+
+    const message = (body: string) => /"message":"([^"]+)"/.exec(body)?.[1];
+    expect(message(unknownUser.text)).toBe(message(wrongPassword.text));
+  });
+
+  it('rejects suspended users with a clear forbidden response', () => {
+    loginUser = {
+      id: 'suspended-user',
+      name: 'Suspended User',
+      email: 'suspended@example.com',
+      role: UserRole.USER,
+      avatarUrl: null,
+      language: 'bn',
+      password: passwordHash,
+      status: UserStatus.SUSPENDED,
+    };
+
+    return request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'suspended@example.com', password: 'CorrectHorse9' })
+      .expect(403)
+      .expect(({ text }) => {
+        expect(text).toContain('"message":"This account is suspended"');
+      });
+  });
+
+  it('limits login attempts to five per minute per IP', async () => {
+    loginUser = null;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'absent@example.com', password: 'Incorrect9' })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'absent@example.com', password: 'Incorrect9' })
+      .expect(429);
+  });
+
+  it('refreshes an access token after re-reading the user', async () => {
+    loginUser = {
+      id: 'test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      role: UserRole.USER,
+      avatarUrl: null,
+      language: 'bn',
+      password: passwordHash,
+      status: UserStatus.ACTIVE,
+    };
+    const refreshToken = app
+      .get(JwtService)
+      .sign(
+        { sub: 'test-user', email: 'test@example.com', role: UserRole.USER },
+        { secret: process.env.REFRESH_TOKEN_SECRET, expiresIn: '7d' },
+      );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken })
+      .expect(201);
+
+    expect(response.text).toMatch(/"accessToken":"[^"]+"/);
+    expect(response.text).not.toContain('refreshToken');
+  });
+
+  it('uses the same generic forgot-password message for known and unknown emails', async () => {
+    loginUser = null;
+    const unknownEmail = await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: 'absent@example.com' })
+      .expect(201);
+
+    loginUser = {
+      id: 'test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      role: UserRole.USER,
+      avatarUrl: null,
+      language: 'bn',
+      password: passwordHash,
+      status: UserStatus.ACTIVE,
+    };
+    const knownEmail = await request(app.getHttpServer())
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: 'test@example.com' })
+      .expect(201);
+
+    const message = (body: string) => /"message":"([^"]+)"/.exec(body)?.[1];
+    expect(message(knownEmail.text)).toBe(message(unknownEmail.text));
+    const resetToken = /token=([a-f0-9]{64})/.exec(
+      sentMails.at(-1)?.html ?? '',
+    )?.[1];
+    expect(resetToken).toBeDefined();
+    expect(createdResetToken).toBe(sha256(resetToken ?? ''));
+  });
+
+  it('resets the password for a valid reset token', async () => {
+    storedToken = {
+      id: 'reset-token-id',
+      userId: 'test-user',
+      type: TokenType.RESET_PASSWORD,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/reset-password')
+      .send({ token: 'a'.repeat(64), newPassword: 'ChangedPassword9' })
+      .expect(201)
+      .expect(({ text }) => {
+        expect(text).toContain('"message":"Password reset successfully"');
+      });
+  });
+
+  it('verifies a valid email token and removes it', async () => {
+    storedToken = {
+      id: 'verify-token-id',
+      userId: 'test-user',
+      type: TokenType.VERIFY_EMAIL,
+      expiresAt: new Date(Date.now() + 60_000),
+    };
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/auth/verify-email?token=${'b'.repeat(64)}`)
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"message":"Email verified successfully"');
+      });
   });
 
   it('stores accepted images under random names and serves them publicly', async () => {

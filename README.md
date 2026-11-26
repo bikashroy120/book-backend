@@ -44,6 +44,12 @@ users can upload images, PDFs, and manuscripts at `/api/v1/uploads/image`,
 `/api/v1/uploads/pdf`, and `/api/v1/uploads/manuscript`; uploaded files are
 available under `/uploads`.
 
+Public authentication endpoints are under `/api/v1/auth`: `POST /register`,
+`POST /login`, `POST /refresh`, `GET /verify-email`, `POST /forgot-password`,
+and `POST /reset-password`. Login is limited to five attempts per minute per IP.
+Verification and password-reset links are sent through the configured mail
+transport; the current console transport logs delivery metadata only.
+
 ## Compile and run the project
 
 ```bash

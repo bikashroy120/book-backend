@@ -12,6 +12,7 @@ import { validate } from './core/config/env.validation';
 import { PrismaModule } from './core/database/prisma.module';
 import { MailModule } from './core/mail/mail.module';
 import { UploadModule } from './core/storage/upload.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UploadModule } from './core/storage/upload.module';
     PrismaModule,
     MailModule,
     UploadModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [
