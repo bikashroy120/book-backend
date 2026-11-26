@@ -23,13 +23,26 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Hosonta Prokashon's NestJS API backend. Routes are private by default and use
+JWT bearer authentication; public routes must be explicitly marked with
+`@Public()`.
 
 ## Project setup
 
 ```bash
-$ npm install
+npm install
+Copy-Item .env.example .env
 ```
+
+Set `DATABASE_URL`, `FRONTEND_URL`, `ACCESS_TOKEN_SECRET`,
+`REFRESH_TOKEN_SECRET`, and `MAIL_FROM` in `.env` before starting the API.
+Token secrets should be unique, random values. `PORT`, token expiration values,
+and `UPLOAD_DIR` have defaults documented in `.env.example`.
+
+The API is served under `/api/v1`. `GET /api/v1/health` is public. Authenticated
+users can upload images, PDFs, and manuscripts at `/api/v1/uploads/image`,
+`/api/v1/uploads/pdf`, and `/api/v1/uploads/manuscript`; uploaded files are
+available under `/uploads`.
 
 ## Compile and run the project
 
