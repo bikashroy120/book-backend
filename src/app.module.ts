@@ -13,6 +13,7 @@ import { PrismaModule } from './core/database/prisma.module';
 import { MailModule } from './core/mail/mail.module';
 import { UploadModule } from './core/storage/upload.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuthModule } from './modules/auth/auth.module';
     MailModule,
     UploadModule,
     AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

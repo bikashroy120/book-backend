@@ -24,6 +24,10 @@ type LoginTestUser = {
   password: string;
   status: UserStatus;
 };
+type UserLookup = {
+  where?: { id?: string; phone?: string };
+  select?: Record<string, boolean>;
+};
 type StoredToken = {
   id: string;
   userId: string;
@@ -38,7 +42,22 @@ describe('AppController (e2e)', () => {
   let storedToken: StoredToken | null = null;
   let createdUserToken: string | undefined;
   let createdResetToken: string | undefined;
+  let createdStaffPasswordHash: string | undefined;
   let passwordHash: string;
+  let duplicatePhoneOwnerId: string | null = null;
+  const profileUser = {
+    id: 'test-user',
+    name: 'Test User',
+    email: 'test@example.com',
+    phone: '01712345678',
+    role: UserRole.USER,
+    avatarUrl: null,
+    language: 'bn',
+    status: UserStatus.ACTIVE,
+    lastLoginAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   const sentMails: MailMessage[] = [];
   const registrationUser = {
     id: 'registered-user',
@@ -48,6 +67,17 @@ describe('AppController (e2e)', () => {
     role: UserRole.USER,
     avatarUrl: null,
     language: 'bn',
+  };
+  const staffUser = {
+    id: 'created-staff',
+    name: 'Staff User',
+    email: 'staff@example.com',
+    phone: null,
+    role: UserRole.ADMIN,
+    avatarUrl: null,
+    language: 'bn',
+    status: UserStatus.ACTIVE,
+    createdAt: new Date(),
   };
   const transactionMock = {
     user: {
@@ -64,8 +94,22 @@ describe('AppController (e2e)', () => {
   };
   const prismaMock = {
     user: {
-      findUnique: () => Promise.resolve(loginUser),
-      update: () => Promise.resolve({}),
+      findUnique: (input?: UserLookup) => {
+        if (input?.where?.phone) {
+          return Promise.resolve(
+            duplicatePhoneOwnerId ? { id: duplicatePhoneOwnerId } : null,
+          );
+        }
+        if (input?.select?.password) {
+          return Promise.resolve(loginUser);
+        }
+        return Promise.resolve(profileUser);
+      },
+      update: () => Promise.resolve(profileUser),
+      create: (input: { data: { password: string } }) => {
+        createdStaffPasswordHash = input.data.password;
+        return Promise.resolve(staffUser);
+      },
     },
     verificationToken: {
       create: (input: { data: { token: string } }) => {
@@ -139,6 +183,106 @@ describe('AppController (e2e)', () => {
       .expect(401);
   });
 
+  it('keeps own-profile routes private and restricts user management to admins', async () => {
+    await request(app.getHttpServer()).get('/api/v1/users/me').expect(401);
+
+    const userToken = app.get(JwtService).sign(
+      {
+        sub: 'test-user',
+        email: 'test@example.com',
+        role: UserRole.USER,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/users')
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(403);
+  });
+
+  it('returns a safe own profile and rejects duplicate phone updates with 409', async () => {
+    const userToken = app.get(JwtService).sign(
+      {
+        sub: 'test-user',
+        email: 'test@example.com',
+        role: UserRole.USER,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+    const profile = await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+
+    expect(profile.text).toContain('"name":"Test User"');
+    expect(profile.text).not.toContain('"password"');
+
+    duplicatePhoneOwnerId = 'another-user';
+    await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ phone: '01812345678' })
+      .expect(409);
+    duplicatePhoneOwnerId = null;
+  });
+
+  it('creates staff with a temporary password emailed through MailService', async () => {
+    const superAdminToken = app.get(JwtService).sign(
+      {
+        sub: 'super-admin',
+        email: 'super@example.com',
+        role: UserRole.SUPER_ADMIN,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({
+        name: 'Staff User',
+        email: 'staff@example.com',
+        role: UserRole.ADMIN,
+      })
+      .expect(201);
+
+    const temporaryPassword =
+      /Temporary password: <strong>([^<]+)<\/strong>/.exec(
+        sentMails.at(-1)?.html ?? '',
+      )?.[1];
+    expect(temporaryPassword).toBeDefined();
+    expect(createdStaffPasswordHash).toBeDefined();
+    expect(
+      await bcrypt.compare(
+        temporaryPassword ?? '',
+        createdStaffPasswordHash ?? '',
+      ),
+    ).toBe(true);
+    expect(response.text).toContain('"role":"ADMIN"');
+    expect(response.text).not.toContain('"password"');
+    expect(response.text).not.toContain(temporaryPassword ?? '');
+  });
+
+  it('does not let admins create other admins', () => {
+    const adminToken = app.get(JwtService).sign(
+      {
+        sub: 'admin',
+        email: 'admin@example.com',
+        role: UserRole.ADMIN,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+
+    return request(app.getHttpServer())
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        name: 'Staff User',
+        email: 'staff@example.com',
+        role: UserRole.ADMIN,
+      })
+      .expect(403);
+  });
+
   it('validates Bangladesh phone numbers and password complexity at registration', () => {
     return request(app.getHttpServer())
       .post('/api/v1/auth/register')
@@ -166,7 +310,9 @@ describe('AppController (e2e)', () => {
     expect(response.text).toContain('"phone":"01712345678"');
     expect(response.text).not.toContain('"password"');
     expect(createdUserToken).toBeDefined();
-    const rawToken = /token=([a-f0-9]{64})/.exec(sentMails[0].html)?.[1];
+    const rawToken = /token=([a-f0-9]{64})/.exec(
+      sentMails.at(-1)?.html ?? '',
+    )?.[1];
     expect(rawToken).toBeDefined();
     expect(createdUserToken).toBe(sha256(rawToken ?? ''));
   });

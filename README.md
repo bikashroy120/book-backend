@@ -50,6 +50,11 @@ and `POST /reset-password`. Login is limited to five attempts per minute per IP.
 Verification and password-reset links are sent through the configured mail
 transport; the current console transport logs delivery metadata only.
 
+Authenticated users can manage their own profile and password under
+`/api/v1/users/me`. User search, summary, detail, and staff-management routes
+are restricted to admins; role changes are restricted to super admins. Staff
+accounts receive a generated temporary password through the mail transport.
+
 ## Compile and run the project
 
 ```bash
