@@ -1,0 +1,784 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  AUTHOR
+  MODERATOR
+  WORKER
+  USER
+}
+
+enum TokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+  TWO_FACTOR_LOGIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AddressType {
+  HOME
+  OFFICE
+  OTHER
+}
+
+enum BookStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum Availability {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  PRE_ORDER
+}
+
+enum CoverType {
+  PAPERBACK
+  HARDCOVER
+}
+
+enum StockMovementType {
+  PURCHASE // notun stock ashlo
+  SALE // bikri
+  RETURN // ferot
+  ADJUSTMENT // manual somonnoy
+  DAMAGE
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REPORTED
+  REJECTED
+  CLOSED
+}
+
+enum OrderChannel {
+  WEBSITE
+  COUNTER
+}
+
+enum OrderStatus {
+  NEW
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  RETURNED
+}
+
+enum DeliveryStatus {
+  NOT_DISPATCHED
+  READY_TO_SHIP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+  RETURNED
+  COUNTER_HANDOVER
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  COD
+  BKASH
+  NAGAD
+  BANK
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ManuscriptSubmitType {
+  FILE
+  TEXT
+}
+
+enum ManuscriptStatus {
+  SUBMITTED
+  IN_REVIEW
+  REVISION_REQUESTED
+  APPROVED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum RoyaltyStatus {
+  PAYABLE
+  REQUESTED
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum CostCategory {
+  BOOK_PRODUCTION
+  AUTHOR_COMMISSION
+  EMPLOYEE_SALARY
+  MARKETING
+}
+
+enum ProductionCostType {
+  PRINTING
+  PAPER
+  BINDING
+  DESIGN
+  EDITING
+  OTHER
+}
+
+enum MessageStatus {
+  OPEN
+  REPLIED
+  CLOSED
+  SPAM
+}
+
+enum MagazineStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+model User {
+  id          String     @id @default(cuid())
+  email       String     @unique
+  phone       String?    @unique
+  password    String
+  role        UserRole   @default(USER)
+  avatarUrl   String?
+  language    String     @default("bn")
+  status      UserStatus @default(ACTIVE)
+  lastLoginAt DateTime?
+
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  verificationTokens   VerificationToken[]
+  // Author
+  authorProfile        AuthorProfile?
+  authorApplications   AuthorApplication[] @relation("ApplicationApplicant")
+  reviewedApplications AuthorApplication[] @relation("ApplicationReviewer")
+
+  // Reader
+  addresses     Address[]
+  wishlist      Wishlist[]
+  reviews       Review[]
+  reviewReports ReviewReport[]
+  magazines     Magazine[]
+  orders        Order[]        @relation("OrderCustomer")
+  orderIssues   OrderIssue[]
+
+  // Staff (Admin / Employee)
+  handledOrders       Order[]              @relation("OrderStaff")
+  orderHistory        OrderStatusHistory[]
+  stockMovements      StockMovement[]
+  bookEdits           BookEditHistory[]
+  assignedManuscripts Manuscript[]         @relation("ManuscriptEditor")
+  manuscriptFeedbacks ManuscriptFeedback[]
+  moderatedReviews    Review[]             @relation("ReviewModerator")
+  payoutsProcessed    PayoutRequest[]      @relation("PayoutProcessor")
+  costsCreated        CostEntry[]          @relation("CostCreator")
+  salaryCosts         CostEntry[]          @relation("CostEmployee")
+  repliedMessages     ContactMessage[]
+  payments            Payment[]
+
+  manuscripts    Manuscript[]
+  payoutRequests PayoutRequest[]
+}
+
+model VerificationToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  type      TokenType
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+}
+
+model AuthorProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bio             String?         @db.VarChar(300)
+  facebookUrl     String?
+  instagramUrl    String?
+  websiteUrl      String?
+  isVerified      Boolean         @default(false)
+  status          ApprovalStatus  @default(PENDING)
+  agreedToTermsAt DateTime? // "Publishing Terms" e agree korar somoy
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  books           Book[]
+  manuscripts     Manuscript[]
+  royaltyEntries  RoyaltyEntry[]
+  payoutRequests  PayoutRequest[]
+}
+
+model AuthorApplication {
+  id            String         @id @default(cuid())
+  applicationId String
+  applicant     User           @relation("ApplicationApplicant", fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId    String?
+  reviewer      User?          @relation("ApplicationReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  introduction  String         @db.Text
+  writingSample String         @db.Text
+  motivation    String         @db.Text
+  status        ApprovalStatus @default(PENDING)
+  reviewNote    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([status])
+}
+
+model Address {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String
+  phone     String
+  division  String
+  district  String
+  upazila   String
+  details   String
+  type      AddressType @default(HOME)
+  isDefault Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  orders    Order[]
+
+  @@index([userId])
+}
+
+// ====  Catalog ========
+
+model Publisher {
+  id          String     @id @default(cuid())
+  nameBn      String
+  nameEn      String?
+  code        String?    @unique
+  phone       String?
+  email       String?
+  address     String?
+  website     String?
+  logoUrl     String?
+  description String?    @db.Text
+  status      UserStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  books       Book[]
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  nameBn    String
+  nameEn    String
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  createdAt DateTime   @default(now())
+  books     Book[]
+}
+
+model Book {
+  id          String  @id @default(cuid())
+  title       String
+  slug        String  @unique
+  sku         String? @unique
+  description String? @db.Text
+
+  publisherId String
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  authorId   String?
+  author     AuthorProfile? @relation(fields: [authorId], references: [id])
+  authorName String
+
+  totalPages  Int?
+  coverType   CoverType @default(PAPERBACK)
+  publishYear Int?
+
+  // Pricing
+  wholesalePrice  Decimal @default(0) @db.Decimal(10, 2)
+  price           Decimal @db.Decimal(10, 2) // retail price
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  salePrice       Decimal @db.Decimal(10, 2) // price - discount
+  royaltyRate     Decimal @default(0) @db.Decimal(5, 2) // author commission %
+
+  // Inventory
+  stock        Int          @default(0)
+  alertLimit   Int          @default(5)
+  availability Availability @default(IN_STOCK)
+
+  // Media
+  coverImageUrl String?
+  samplePdfUrl  String?
+
+  // Publish control
+  status      BookStatus @default(DRAFT)
+  scheduledAt DateTime?
+  publishedAt DateTime?
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  bookImages        BookImage[]
+  bookEditHistories BookEditHistory[]
+  stockMovements    StockMovement[]
+  wishlists         Wishlist[]
+  reviews           Review[]
+  orderItems        OrderItem[]
+  manuscript        Manuscript?
+  royaltyEntries    RoyaltyEntry[]
+  costEntries       CostEntry[]
+
+  @@index([status, categoryId])
+  @@index([publisherId])
+  @@index([authorId])
+}
+
+model BookImage {
+  id        String @id @default(cuid())
+  bookId    String
+  book      Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int    @default(0)
+}
+
+model BookEditHistory {
+  id        String   @id @default(cuid())
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  editorId  String
+  editor    User     @relation(fields: [editorId], references: [id])
+  action    String // CREATED | UPDATED | PRICE_CHANGED | DELETED ...
+  changes   Json? // { field: { from, to } }
+  createdAt DateTime @default(now())
+
+  @@index([bookId])
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  bookId       String
+  book         Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  type         StockMovementType
+  quantity     Int
+  balanceAfter Int
+  note         String?
+  // orderId      String?
+  // order        Order?            @relation(fields: [orderId], references: [id])
+  createdById  String?
+  createdBy    User?             @relation(fields: [createdById], references: [id])
+  createdAt    DateTime          @default(now())
+
+  @@index([bookId, createdAt])
+}
+
+model Wishlist {
+  userId    String
+  bookId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, bookId])
+}
+
+// =====================================================================
+//  REVIEWS & MODERATION
+// =====================================================================
+
+model Review {
+  id                 String         @id @default(cuid())
+  bookId             String
+  book               Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int
+  title              String?
+  comment            String         @db.Text
+  status             ReviewStatus   @default(PENDING)
+  isVerifiedPurchase Boolean        @default(false)
+  reportCount        Int            @default(0)
+  moderatorId        String?
+  moderator          User?          @relation("ReviewModerator", fields: [moderatorId], references: [id])
+  moderatedAt        DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  reviewReports      ReviewReport[]
+
+  @@unique([bookId, userId])
+  @@index([status])
+}
+
+model ReviewReport {
+  id         String   @id @default(cuid())
+  reviewId   String
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User     @relation(fields: [reporterId], references: [id])
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@unique([reviewId, reporterId])
+}
+
+// =====================================================================
+//  SHOPS (Counter / Wholesale customers)
+// =====================================================================
+
+model Shop {
+  id             String     @id @default(cuid())
+  name           String
+  shopType       String?
+  ownerName      String
+  phone          String
+  whatsapp       String?
+  district       String?
+  area           String?
+  address        String?
+  commissionRate Decimal    @default(0) @db.Decimal(5, 2) // 30 / 35 / 40 %
+  status         UserStatus @default(ACTIVE)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  orders         Order[]
+}
+
+// =====================================================================
+//  ORDERS (Website + Counter ek-i table e)
+// =====================================================================
+
+model Courier {
+  id       String  @id @default(cuid())
+  name     String  @unique // Pathao, Steadfast, RedX ...
+  phone    String?
+  isActive Boolean @default(true)
+  orders   Order[]
+}
+
+model Order {
+  id           String       @id @default(cuid())
+  orderNo      String       @unique
+  channel      OrderChannel
+  customerId   String?
+  customer     User?        @relation("OrderCustomer", fields: [customerId], references: [id])
+  shopId       String?
+  shop         Shop?        @relation(fields: [shopId], references: [id])
+  staffId      String?
+  staff        User?        @relation("OrderStaff", fields: [staffId], references: [id])
+  repName      String?
+  // Shipping (website)
+  addressId    String?
+  address      Address?     @relation(fields: [addressId], references: [id])
+  shipName     String?
+  shipPhone    String?
+  shipAddress  String?
+  shipDistrict String?
+
+  // Status
+  status         OrderStatus    @default(NEW)
+  deliveryStatus DeliveryStatus @default(NOT_DISPATCHED)
+  paymentStatus  PaymentStatus  @default(UNPAID)
+  paymentMethod  PaymentMethod  @default(COD)
+
+  // Courier
+  courierId  String?
+  courier    Courier? @relation(fields: [courierId], references: [id])
+  trackingNo String?
+
+  // Money
+  subtotal         Decimal @db.Decimal(12, 2)
+  discountAmount   Decimal @default(0) @db.Decimal(12, 2)
+  deliveryCharge   Decimal @default(0) @db.Decimal(12, 2)
+  commissionRate   Decimal @default(0) @db.Decimal(5, 2) // counter order e
+  commissionAmount Decimal @default(0) @db.Decimal(12, 2)
+  total            Decimal @db.Decimal(12, 2)
+  paidAmount       Decimal @default(0) @db.Decimal(12, 2)
+  dueAmount        Decimal @default(0) @db.Decimal(12, 2)
+
+  note                 String?
+  placedAt             DateTime             @default(now())
+  deliveredAt          DateTime?
+  cancelledAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  orderItems           OrderItem[]
+  orderStatusHistories OrderStatusHistory[]
+  payments             Payment[]
+  orderIssues          OrderIssue[]
+
+  @@index([channel, status])
+  @@index([customerId])
+  @@index([shopId])
+  @@index([placedAt])
+}
+
+model OrderItem {
+  id            String        @id @default(cuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookId        String
+  book          Book          @relation(fields: [bookId], references: [id])
+  // snapshot - pore price change hole-o purono order thik thakbe
+  titleSnapshot String
+  unitPrice     Decimal       @db.Decimal(10, 2)
+  quantity      Int
+  lineTotal     Decimal       @db.Decimal(12, 2)
+  royaltyEntry  RoyaltyEntry?
+
+  @@index([orderId])
+  @@index([bookId])
+}
+
+model OrderStatusHistory {
+  id             String          @id @default(cuid())
+  orderId        String
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status         OrderStatus
+  deliveryStatus DeliveryStatus?
+  note           String?
+  changedById    String?
+  changedBy      User?           @relation(fields: [changedById], references: [id])
+  createdAt      DateTime        @default(now())
+
+  @@index([orderId])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod
+  transactionId String?
+  receivedById  String?
+  receivedBy    User?         @relation(fields: [receivedById], references: [id])
+  paidAt        DateTime      @default(now())
+
+  @@index([orderId])
+}
+
+// Reader "Submit Issue"
+model OrderIssue {
+  id         String      @id @default(cuid())
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  subject    String
+  details    String      @db.Text
+  status     IssueStatus @default(OPEN)
+  resolution String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// =====================================================================
+//  MANUSCRIPTS (Author -> Admin review)
+// =====================================================================
+
+model Manuscript {
+  id          String               @id @default(cuid())
+  code        String?              @unique // manuscript-1
+  title       String
+  genre       String // উপন্যাস, গল্প, কবিতা ...
+  authorId    String
+  author      AuthorProfile        @relation(fields: [authorId], references: [id])
+  submitType  ManuscriptSubmitType @default(FILE)
+  fileUrl     String? // PDF / DOCX, max 10MB
+  textContent String?              @db.Text
+  status      ManuscriptStatus     @default(SUBMITTED)
+  priority    Priority             @default(NORMAL)
+  editorId    String?
+  editor      User?                @relation("ManuscriptEditor", fields: [editorId], references: [id])
+  submittedAt DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  // Approve hoye boi hole
+  bookId String? @unique
+  book   Book?   @relation(fields: [bookId], references: [id])
+
+  feedbacks ManuscriptFeedback[]
+  user      User?                @relation(fields: [userId], references: [id])
+  userId    String?
+
+  @@index([status])
+  @@index([authorId])
+}
+
+model ManuscriptFeedback {
+  id           String     @id @default(cuid())
+  manuscriptId String
+  manuscript   Manuscript @relation(fields: [manuscriptId], references: [id], onDelete: Cascade)
+  authorUserId String
+  user         User       @relation(fields: [authorUserId], references: [id])
+  message      String     @db.Text
+  createdAt    DateTime   @default(now())
+}
+
+// =====================================================================
+//  ROYALTY & PAYOUT (Author Sales Analytics)
+// =====================================================================
+
+// Proti OrderItem e author er commission
+model RoyaltyEntry {
+  id          String         @id @default(cuid())
+  authorId    String
+  author      AuthorProfile  @relation(fields: [authorId], references: [id])
+  bookId      String
+  book        Book           @relation(fields: [bookId], references: [id])
+  orderItemId String         @unique
+  orderItem   OrderItem      @relation(fields: [orderItemId], references: [id])
+  copies      Int
+  ratePerCopy Decimal        @db.Decimal(10, 2)
+  rate        Decimal        @db.Decimal(5, 2) // snapshot of royaltyRate %
+  amount      Decimal        @db.Decimal(12, 2)
+  status      RoyaltyStatus  @default(PAYABLE)
+  payoutId    String?
+  payout      PayoutRequest? @relation(fields: [payoutId], references: [id])
+  createdAt   DateTime       @default(now())
+
+  @@index([authorId, status])
+  @@index([bookId])
+}
+
+model PayoutRequest {
+  id            String        @id @default(cuid())
+  code          String        @unique // PR-1001
+  authorId      String
+  author        AuthorProfile @relation(fields: [authorId], references: [id])
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod // BKASH | NAGAD | BANK
+  accountNo     String
+  status        PayoutStatus  @default(PENDING)
+  adminNote     String?
+  processedById String?
+  processedBy   User?         @relation("PayoutProcessor", fields: [processedById], references: [id])
+  requestedAt   DateTime      @default(now())
+  processedAt   DateTime?
+
+  royalties RoyaltyEntry[]
+  user      User?          @relation(fields: [userId], references: [id])
+  userId    String?
+
+  @@index([authorId, status])
+}
+
+// =====================================================================
+//  TOTAL COST (Admin)
+// =====================================================================
+
+model CostEntry {
+  id             String              @id @default(cuid())
+  category       CostCategory
+  productionType ProductionCostType? // shudhu BOOK_PRODUCTION er jonno
+  bookId         String?
+  book           Book?               @relation(fields: [bookId], references: [id])
+  employeeId     String? // EMPLOYEE_SALARY
+  employee       User?               @relation("CostEmployee", fields: [employeeId], references: [id])
+  title          String?
+  amount         Decimal             @db.Decimal(12, 2)
+  date           DateTime
+  note           String?
+  createdById    String
+  createdBy      User                @relation("CostCreator", fields: [createdById], references: [id])
+  createdAt      DateTime            @default(now())
+
+  @@index([category, date])
+  @@index([bookId])
+}
+
+// =====================================================================
+//  MESSAGES & MAGAZINE & SETTINGS
+// =====================================================================
+
+model ContactMessage {
+  id          String        @id @default(cuid())
+  name        String
+  email       String
+  subject     String
+  message     String        @db.Text
+  status      MessageStatus @default(OPEN)
+  reply       String?       @db.Text
+  repliedById String?
+  repliedBy   User?         @relation(fields: [repliedById], references: [id])
+  repliedAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+}
+
+// Reader "Add Magazine" (lekha submit -> admin approve -> prokash)
+model Magazine {
+  id          String         @id @default(cuid())
+  title       String
+  category    String
+  summary     String         @db.VarChar(300)
+  content     String         @db.Text
+  coverUrl    String?
+  status      MagazineStatus @default(PENDING)
+  authorId    String
+  author      User           @relation(fields: [authorId], references: [id])
+  publishedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
