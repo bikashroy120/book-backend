@@ -81,6 +81,9 @@ Staff manage inventory counts and stock movements under `/api/v1/stock`.
 Stock history, alerts, summaries, alert limits, and a UTF-8 CSV export are
 available in the same route group.
 
+Staff manage shop records, counter-order totals, and POS dropdown options under
+`/api/v1/shops`; deleting a shop with orders suspends it instead.
+
 ## Compile and run the project
 
 ```bash

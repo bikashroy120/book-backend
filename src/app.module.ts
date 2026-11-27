@@ -20,6 +20,7 @@ import { PublishersModule } from './modules/publishers/publishers.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { BooksModule } from './modules/books/books.module';
 import { StockModule } from './modules/stock/stock.module';
+import { ShopsModule } from './modules/shops/shops.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { StockModule } from './modules/stock/stock.module';
     CategoriesModule,
     BooksModule,
     StockModule,
+    ShopsModule,
   ],
   controllers: [AppController],
   providers: [
