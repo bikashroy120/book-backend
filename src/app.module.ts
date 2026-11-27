@@ -15,6 +15,7 @@ import { UploadModule } from './core/storage/upload.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
+import { AuthorsModule } from './modules/authors/authors.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AddressesModule } from './modules/addresses/addresses.module';
     AuthModule,
     UsersModule,
     AddressesModule,
+    AuthorsModule,
   ],
   controllers: [AppController],
   providers: [

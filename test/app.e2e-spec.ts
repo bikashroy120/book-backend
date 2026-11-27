@@ -1,7 +1,12 @@
 import { ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { TokenType, UserRole, UserStatus } from '@prisma/client';
+import {
+  ApprovalStatus,
+  TokenType,
+  UserRole,
+  UserStatus,
+} from '@prisma/client';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -13,6 +18,7 @@ import { rm } from 'node:fs/promises';
 import { sha256 } from '../src/common/utils/crypto';
 import { MailService } from '../src/core/mail/mail.service';
 import type { MailMessage } from '../src/core/mail/mail.types';
+import { AuthorsService } from '../src/modules/authors/authors.service';
 
 type LoginTestUser = {
   id: string;
@@ -57,6 +63,31 @@ type TestAddressInput = {
   data?: Partial<TestAddress>;
   orderBy?: Array<Record<string, string>>;
 };
+type TestAuthorApplication = {
+  id: string;
+  applicantId: string;
+  introduction: string;
+  writingSample: string;
+  motivation: string;
+  status: ApprovalStatus;
+  reviewNote: string | null;
+  reviewerId: string | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+};
+type TestAuthorProfile = {
+  id: string;
+  userId: string;
+  bio: string | null;
+  facebookUrl: string | null;
+  instagramUrl: string | null;
+  websiteUrl: string | null;
+  isVerified: boolean;
+  status: ApprovalStatus;
+  agreedToTermsAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 describe('AppController (e2e)', () => {
   let app: NestExpressApplication<App>;
@@ -68,7 +99,12 @@ describe('AppController (e2e)', () => {
   let createdStaffPasswordHash: string | undefined;
   let passwordHash: string;
   let duplicatePhoneOwnerId: string | null = null;
+  let currentUserRole = UserRole.USER;
+  let nextApplicationId = 1;
+  let nextAuthorProfileId = 1;
   const testAddresses: TestAddress[] = [];
+  const testApplications: TestAuthorApplication[] = [];
+  const testAuthorProfiles: TestAuthorProfile[] = [];
   let nextAddressId = 1;
   const profileUser = {
     id: 'test-user',
@@ -103,6 +139,178 @@ describe('AppController (e2e)', () => {
     language: 'bn',
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
+  };
+  const applicationApplicant = {
+    id: 'application-user',
+    name: 'Applicant Name',
+    email: 'applicant@example.com',
+  };
+  const matchesApplicationWhere = (
+    application: TestAuthorApplication,
+    where: {
+      id?: string;
+      applicantId?: string;
+      status?: ApprovalStatus;
+    } = {},
+  ) =>
+    (!where.id || application.id === where.id) &&
+    (!where.applicantId || application.applicantId === where.applicantId) &&
+    (!where.status || application.status === where.status);
+  const applicationMock = {
+    create: (input: {
+      data: Omit<
+        TestAuthorApplication,
+        | 'id'
+        | 'status'
+        | 'reviewNote'
+        | 'reviewerId'
+        | 'reviewedAt'
+        | 'createdAt'
+      >;
+    }) => {
+      const application: TestAuthorApplication = {
+        ...input.data,
+        id: `application-${nextApplicationId++}`,
+        status: ApprovalStatus.PENDING,
+        reviewNote: null,
+        reviewerId: null,
+        reviewedAt: null,
+        createdAt: new Date(),
+      };
+      testApplications.push(application);
+      return Promise.resolve(application);
+    },
+    findFirst: (input: {
+      where: { applicantId?: string; status?: ApprovalStatus };
+      orderBy?: { createdAt: string };
+    }) => {
+      const result = testApplications
+        .filter((application) =>
+          matchesApplicationWhere(application, input.where),
+        )
+        .sort(
+          (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+        )[0];
+      return Promise.resolve(result ?? null);
+    },
+    findUnique: (input: { where: { id: string } }) => {
+      const application = testApplications.find(
+        (entry) => entry.id === input.where.id,
+      );
+      return Promise.resolve(
+        application
+          ? {
+              ...application,
+              applicant: applicationApplicant,
+            }
+          : null,
+      );
+    },
+    findMany: (input: {
+      where?: { status?: ApprovalStatus };
+      skip?: number;
+      take?: number;
+    }) =>
+      Promise.resolve(
+        testApplications
+          .filter((application) =>
+            matchesApplicationWhere(application, input.where),
+          )
+          .slice(input.skip ?? 0, (input.skip ?? 0) + (input.take ?? 20))
+          .map((application) => ({
+            ...application,
+            applicant: applicationApplicant,
+          })),
+      ),
+    updateMany: (input: {
+      where: { id: string; status?: ApprovalStatus };
+      data: Partial<TestAuthorApplication>;
+    }) => {
+      const application = testApplications.find((entry) =>
+        matchesApplicationWhere(entry, input.where),
+      );
+      if (!application) return Promise.resolve({ count: 0 });
+      Object.assign(application, input.data);
+      return Promise.resolve({ count: 1 });
+    },
+    count: (input: { where?: { status?: ApprovalStatus } } = {}) =>
+      Promise.resolve(
+        testApplications.filter((application) =>
+          matchesApplicationWhere(application, input.where),
+        ).length,
+      ),
+  };
+  const authorProfileMock = {
+    findUnique: (input: { where: { id?: string; userId?: string } }) => {
+      const profile = testAuthorProfiles.find(
+        (entry) =>
+          (!input.where.id || entry.id === input.where.id) &&
+          (!input.where.userId || entry.userId === input.where.userId),
+      );
+      return Promise.resolve(
+        profile
+          ? {
+              ...profile,
+              user: { name: applicationApplicant.name, avatarUrl: null },
+            }
+          : null,
+      );
+    },
+    findFirst: (input: { where: { id: string; status: ApprovalStatus } }) => {
+      const profile = testAuthorProfiles.find(
+        (entry) =>
+          entry.id === input.where.id && entry.status === input.where.status,
+      );
+      return Promise.resolve(
+        profile
+          ? {
+              ...profile,
+              user: { name: applicationApplicant.name, avatarUrl: null },
+              books: [],
+            }
+          : null,
+      );
+    },
+    findMany: () =>
+      Promise.resolve(
+        testAuthorProfiles.map((profile) => ({
+          ...profile,
+          user: { name: applicationApplicant.name, avatarUrl: null },
+          _count: { books: 0 },
+        })),
+      ),
+    create: (input: {
+      data: { userId: string; status: ApprovalStatus; isVerified: boolean };
+    }) => {
+      const profile: TestAuthorProfile = {
+        id: `author-${nextAuthorProfileId++}`,
+        userId: input.data.userId,
+        bio: null,
+        facebookUrl: null,
+        instagramUrl: null,
+        websiteUrl: null,
+        isVerified: input.data.isVerified,
+        status: input.data.status,
+        agreedToTermsAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      testAuthorProfiles.push(profile);
+      return Promise.resolve(profile);
+    },
+    update: (input: {
+      where: { id: string };
+      data: Partial<TestAuthorProfile>;
+    }) => {
+      const profile = testAuthorProfiles.find(
+        (entry) => entry.id === input.where.id,
+      );
+      if (!profile)
+        return Promise.reject(new Error('Author profile not found'));
+      Object.assign(profile, input.data);
+      return Promise.resolve(profile);
+    },
+    count: () => Promise.resolve(testAuthorProfiles.length),
   };
   const matchesAddressWhere = (
     address: TestAddress,
@@ -191,8 +399,12 @@ describe('AppController (e2e)', () => {
   };
   const transactionMock = {
     user: {
+      findUnique: () => Promise.resolve({ role: currentUserRole }),
       create: () => Promise.resolve(registrationUser),
-      update: () => Promise.resolve({}),
+      update: (input: { data: { role?: UserRole } }) => {
+        if (input.data.role) currentUserRole = input.data.role;
+        return Promise.resolve({});
+      },
     },
     verificationToken: {
       create: (input: { data: { token: string } }) => {
@@ -202,6 +414,8 @@ describe('AppController (e2e)', () => {
       deleteMany: () => Promise.resolve({ count: 1 }),
     },
     address: addressMock,
+    authorApplication: applicationMock,
+    authorProfile: authorProfileMock,
   };
   const prismaMock = {
     user: {
@@ -210,6 +424,9 @@ describe('AppController (e2e)', () => {
           return Promise.resolve(
             duplicatePhoneOwnerId ? { id: duplicatePhoneOwnerId } : null,
           );
+        }
+        if (input?.select?.role && Object.keys(input.select).length === 1) {
+          return Promise.resolve({ role: currentUserRole });
         }
         if (input?.select?.password) {
           return Promise.resolve(loginUser);
@@ -221,6 +438,7 @@ describe('AppController (e2e)', () => {
         createdStaffPasswordHash = input.data.password;
         return Promise.resolve(staffUser);
       },
+      count: () => Promise.resolve(currentUserRole === UserRole.AUTHOR ? 1 : 0),
     },
     verificationToken: {
       create: (input: { data: { token: string } }) => {
@@ -231,6 +449,8 @@ describe('AppController (e2e)', () => {
       delete: () => Promise.resolve({}),
     },
     address: addressMock,
+    authorApplication: applicationMock,
+    authorProfile: authorProfileMock,
     $transaction: <T>(
       callback: (transaction: typeof transactionMock) => Promise<T>,
     ) => callback(transactionMock),
@@ -557,6 +777,129 @@ describe('AppController (e2e)', () => {
         role: UserRole.ADMIN,
       })
       .expect(403);
+  });
+
+  it('lets a reader apply once while an application is pending', async () => {
+    testApplications.splice(0);
+    currentUserRole = UserRole.USER;
+    const token = accessTokenFor('application-user');
+    const application = {
+      introduction: 'I have written stories for many years.',
+      writingSample: 'This writing sample is at least twenty characters.',
+      motivation: 'I want to publish books for local readers.',
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/v1/author-applications')
+      .set('Authorization', `Bearer ${token}`)
+      .send(application)
+      .expect(201);
+    await request(app.getHttpServer())
+      .get('/api/v1/author-applications/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"status":"PENDING"');
+      });
+    await request(app.getHttpServer())
+      .post('/api/v1/author-applications')
+      .set('Authorization', `Bearer ${token}`)
+      .send(application)
+      .expect(409);
+  });
+
+  it('reviews a pending application in one transaction and creates a verified author', async () => {
+    const application = testApplications.find(
+      (entry) => entry.applicantId === 'application-user',
+    );
+    if (!application) throw new Error('Expected the reader application');
+    const adminToken = accessTokenFor('reviewing-admin', UserRole.ADMIN);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/author-applications/${application.id}/review`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED', reviewNote: 'Welcome as an author.' })
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"status":"APPROVED"');
+        expect(text).toContain('"reviewerId":"reviewing-admin"');
+      });
+
+    expect(currentUserRole).toBe(UserRole.AUTHOR);
+    expect(testAuthorProfiles).toHaveLength(1);
+    expect(testAuthorProfiles[0].status).toBe(ApprovalStatus.APPROVED);
+    expect(testAuthorProfiles[0].isVerified).toBe(true);
+    expect(
+      sentMails.some(
+        (message) =>
+          message.to === 'applicant@example.com' &&
+          message.subject.includes('approved'),
+      ),
+    ).toBe(true);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/author-applications/${application.id}/review`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'REJECTED' })
+      .expect(409);
+  });
+
+  it('allows authors to edit their profile and record terms agreement', async () => {
+    const authorToken = accessTokenFor('application-user', UserRole.AUTHOR);
+    await request(app.getHttpServer())
+      .patch('/api/v1/authors/me')
+      .set('Authorization', `Bearer ${authorToken}`)
+      .send({
+        bio: 'A short author biography.',
+        facebookUrl: 'https://facebook.com/author',
+      })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch('/api/v1/authors/me')
+      .set('Authorization', `Bearer ${authorToken}`)
+      .send({ websiteUrl: 'not-a-url' })
+      .expect(400);
+
+    await expect(
+      app.get(AuthorsService).assertTermsAgreed('application-user'),
+    ).rejects.toThrow('You must agree to the author terms');
+    await request(app.getHttpServer())
+      .post('/api/v1/authors/me/agree-terms')
+      .set('Authorization', `Bearer ${authorToken}`)
+      .expect(201);
+    await expect(
+      app.get(AuthorsService).assertTermsAgreed('application-user'),
+    ).resolves.toBeUndefined();
+    await request(app.getHttpServer())
+      .get('/api/v1/authors/me/terms-status')
+      .set('Authorization', `Bearer ${authorToken}`)
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"hasAgreed":true');
+      });
+  });
+
+  it('exposes approved authors publicly and permits staff directory reads', async () => {
+    const workerToken = accessTokenFor('staff-user', UserRole.WORKER);
+    await request(app.getHttpServer())
+      .get('/api/v1/authors')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .get('/api/v1/authors/summary')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch('/api/v1/authors/author-1/status')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .send({ status: 'APPROVED' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/api/v1/public/authors/author-1')
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"name":"Applicant Name"');
+      });
   });
 
   it('validates Bangladesh phone numbers and password complexity at registration', () => {

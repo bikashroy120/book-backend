@@ -59,6 +59,12 @@ Authenticated users can manage up to ten of their own delivery addresses under
 `/api/v1/addresses`. Deleting an address clears an order's optional `addressId`
 reference (`ON DELETE SET NULL`); order shipping details remain on the order.
 
+Author applications are available to readers at `/api/v1/author-applications`.
+Admins review applications, and approved applicants receive an author profile.
+Authors manage their profile and publishing-terms agreement at
+`/api/v1/authors/me`; staff can browse the directory and approved profiles are
+available at `/api/v1/public/authors/:id`.
+
 ## Compile and run the project
 
 ```bash

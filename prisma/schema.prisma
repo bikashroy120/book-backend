@@ -266,10 +266,10 @@ model AuthorProfile {
 
 model AuthorApplication {
   id            String         @id @default(cuid())
-  applicationId String
-  applicant     User           @relation("ApplicationApplicant", fields: [applicationId], references: [id], onDelete: Cascade)
+  applicantId   String
+  applicant     User           @relation("ApplicationApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
   reviewerId    String?
-  reviewer      User?          @relation("ApplicationReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewer      User?           @relation("ApplicationReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
   introduction  String         @db.Text
   writingSample String         @db.Text
   motivation    String         @db.Text
