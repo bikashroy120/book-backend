@@ -29,6 +29,8 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ManuscriptsModule } from './modules/manuscripts/manuscripts.module';
 import { RoyaltiesModule } from './modules/royalties/royalties.module';
 import { CostsModule } from './modules/costs/costs.module';
+import { MessagesModule } from './modules/messages/messages.module';
+import { MagazinesModule } from './modules/magazines/magazines.module';
 
 @Module({
   imports: [
@@ -57,6 +59,8 @@ import { CostsModule } from './modules/costs/costs.module';
     ManuscriptsModule,
     RoyaltiesModule,
     CostsModule,
+    MessagesModule,
+    MagazinesModule,
   ],
   controllers: [AppController],
   providers: [
