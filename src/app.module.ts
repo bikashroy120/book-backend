@@ -23,6 +23,7 @@ import { StockModule } from './modules/stock/stock.module';
 import { ShopsModule } from './modules/shops/shops.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { CounterOrdersModule } from './modules/counter-orders/counter-orders.module';
+import { OrderManagementModule } from './modules/order-management/order-management.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { CounterOrdersModule } from './modules/counter-orders/counter-orders.mod
     ShopsModule,
     OrdersModule,
     CounterOrdersModule,
+    OrderManagementModule,
   ],
   controllers: [AppController],
   providers: [

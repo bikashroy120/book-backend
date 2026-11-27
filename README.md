@@ -92,6 +92,11 @@ Staff can create counter memos, collect payments, and retrieve invoice data
 through `/api/v1/counter-orders`. Counter orders share the order and stock
 movement records with online orders.
 
+Staff manage online and counter orders, track lifecycle changes, assign
+couriers and staff, collect payments, and review customer issues through
+`/api/v1/admin/orders` and `/api/v1/admin/order-issues`. Courier records are
+managed under `/api/v1/couriers`; order exports are available as UTF-8 CSV.
+
 ## Compile and run the project
 
 ```bash
