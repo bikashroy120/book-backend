@@ -70,6 +70,13 @@ Staff can browse publishers and publisher book/inventory summaries at
 `/api/v1/categories` endpoint returns the category tree, and staff can manage
 categories.
 
+Staff manage book records, inventory metadata, and edit history under
+`/api/v1/books`. Authors can view their own titles at `/api/v1/books/mine`.
+Published titles are available publicly through `/api/v1/store/books`; scheduled
+titles are published automatically when their scheduled time arrives.
+Store book detail currently returns a null average rating and zero review count
+until review aggregation is connected.
+
 ## Compile and run the project
 
 ```bash
