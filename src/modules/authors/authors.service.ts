@@ -15,6 +15,7 @@ import type { AuthorsQueryDTO } from './dto/authors-query.dto';
 import type { CreateAuthorApplicationDTO } from './dto/create-author-application.dto';
 import type { ReviewAuthorApplicationDTO } from './dto/review-author-application.dto';
 import type { UpdateAuthorProfileDTO } from './dto/update-author-profile.dto';
+import { RoyaltyService } from '../royalties/royalty.service';
 
 const authorProfileSelect = {
   id: true,
@@ -55,6 +56,7 @@ export class AuthorsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly royaltyService: RoyaltyService,
   ) {}
 
   async createApplication(userId: string, input: CreateAuthorApplicationDTO) {
@@ -348,7 +350,7 @@ export class AuthorsService {
   }
 
   getAuthorBalances(authorIds: string[]) {
-    return new Map(authorIds.map((id) => [id, zeroBalance()]));
+    return this.royaltyService.getAuthorBalances(authorIds);
   }
 
   async findAuthors(query: AuthorsQueryDTO) {
@@ -400,7 +402,9 @@ export class AuthorsService {
       this.prisma.authorProfile.count({ where }),
     ]);
 
-    const balances = this.getAuthorBalances(authors.map((author) => author.id));
+    const balances = await this.getAuthorBalances(
+      authors.map((author) => author.id),
+    );
 
     return {
       data: authors.map((author) => ({
@@ -417,17 +421,19 @@ export class AuthorsService {
   }
 
   async getSummary() {
-    const [totalRegisteredAuthors, pendingApplications] = await Promise.all([
-      this.prisma.user.count({ where: { role: UserRole.AUTHOR } }),
-      this.prisma.authorApplication.count({
-        where: { status: ApprovalStatus.PENDING },
-      }),
-    ]);
+    const [totalRegisteredAuthors, pendingApplications, royaltySummary] =
+      await Promise.all([
+        this.prisma.user.count({ where: { role: UserRole.AUTHOR } }),
+        this.prisma.authorApplication.count({
+          where: { status: ApprovalStatus.PENDING },
+        }),
+        this.royaltyService.getSummaryMetrics(),
+      ]);
     return {
       totalRegisteredAuthors,
       pendingApplications,
-      pendingPayoutRequests: 0,
-      totalSettledRoyalties: new Prisma.Decimal(0),
+      pendingPayoutRequests: royaltySummary.pendingPayoutRequests,
+      totalSettledRoyalties: royaltySummary.totalSettledRoyalties,
     };
   }
 

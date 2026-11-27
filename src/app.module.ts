@@ -27,6 +27,8 @@ import { OrderManagementModule } from './modules/order-management/order-manageme
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ManuscriptsModule } from './modules/manuscripts/manuscripts.module';
+import { RoyaltiesModule } from './modules/royalties/royalties.module';
+import { CostsModule } from './modules/costs/costs.module';
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import { ManuscriptsModule } from './modules/manuscripts/manuscripts.module';
     WishlistModule,
     ReviewsModule,
     ManuscriptsModule,
+    RoyaltiesModule,
+    CostsModule,
   ],
   controllers: [AppController],
   providers: [

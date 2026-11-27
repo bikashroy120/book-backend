@@ -230,7 +230,6 @@ model User {
   repliedMessages     ContactMessage[]
   payments            Payment[]
 
-  payoutRequests PayoutRequest[]
 }
 
 model VerificationToken {
@@ -710,8 +709,7 @@ model PayoutRequest {
   processedAt   DateTime?
 
   royalties RoyaltyEntry[]
-  user      User?          @relation(fields: [userId], references: [id])
-  userId    String?
+  costEntry CostEntry?
 
   @@index([authorId, status])
 }
@@ -724,6 +722,8 @@ model CostEntry {
   id             String              @id @default(cuid())
   category       CostCategory
   productionType ProductionCostType? // shudhu BOOK_PRODUCTION er jonno
+  payoutId       String?             @unique
+  payout         PayoutRequest?      @relation(fields: [payoutId], references: [id], onDelete: SetNull)
   bookId         String?
   book           Book?               @relation(fields: [bookId], references: [id])
   employeeId     String? // EMPLOYEE_SALARY
