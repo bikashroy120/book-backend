@@ -88,6 +88,10 @@ Customers can place, track, and cancel eligible orders, and submit order issues,
 through `/api/v1/orders`. Order creation snapshots prices and shipping details
 and updates stock within the same transaction.
 
+Staff can create counter memos, collect payments, and retrieve invoice data
+through `/api/v1/counter-orders`. Counter orders share the order and stock
+movement records with online orders.
+
 ## Compile and run the project
 
 ```bash
