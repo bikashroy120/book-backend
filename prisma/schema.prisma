@@ -521,7 +521,7 @@ model Order {
   repName      String?
   // Shipping (website)
   addressId    String?
-  address      Address?     @relation(fields: [addressId], references: [id])
+  address      Address?     @relation(fields: [addressId], references: [id], onDelete: SetNull)
   shipName     String?
   shipPhone    String?
   shipAddress  String?

@@ -14,6 +14,7 @@ import { MailModule } from './core/mail/mail.module';
 import { UploadModule } from './core/storage/upload.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { AddressesModule } from './modules/addresses/addresses.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { UsersModule } from './modules/users/users.module';
     UploadModule,
     AuthModule,
     UsersModule,
+    AddressesModule,
   ],
   controllers: [AppController],
   providers: [

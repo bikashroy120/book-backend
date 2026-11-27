@@ -55,6 +55,10 @@ Authenticated users can manage their own profile and password under
 are restricted to admins; role changes are restricted to super admins. Staff
 accounts receive a generated temporary password through the mail transport.
 
+Authenticated users can manage up to ten of their own delivery addresses under
+`/api/v1/addresses`. Deleting an address clears an order's optional `addressId`
+reference (`ON DELETE SET NULL`); order shipping details remain on the order.
+
 ## Compile and run the project
 
 ```bash

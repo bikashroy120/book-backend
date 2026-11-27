@@ -34,6 +34,29 @@ type StoredToken = {
   type: TokenType;
   expiresAt: Date;
 };
+type TestAddress = {
+  id: string;
+  userId: string;
+  fullName: string;
+  phone: string;
+  division: string;
+  district: string;
+  upazila: string;
+  details: string;
+  type: string;
+  isDefault: boolean;
+  createdAt: Date;
+};
+type TestAddressWhere = {
+  id?: string | { not: string };
+  userId?: string;
+  isDefault?: boolean;
+};
+type TestAddressInput = {
+  where?: TestAddressWhere;
+  data?: Partial<TestAddress>;
+  orderBy?: Array<Record<string, string>>;
+};
 
 describe('AppController (e2e)', () => {
   let app: NestExpressApplication<App>;
@@ -45,6 +68,8 @@ describe('AppController (e2e)', () => {
   let createdStaffPasswordHash: string | undefined;
   let passwordHash: string;
   let duplicatePhoneOwnerId: string | null = null;
+  const testAddresses: TestAddress[] = [];
+  let nextAddressId = 1;
   const profileUser = {
     id: 'test-user',
     name: 'Test User',
@@ -79,6 +104,91 @@ describe('AppController (e2e)', () => {
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
   };
+  const matchesAddressWhere = (
+    address: TestAddress,
+    where: TestAddressWhere = {},
+  ) => {
+    const matchesId =
+      typeof where.id === 'string'
+        ? address.id === where.id
+        : where.id && 'not' in where.id
+          ? address.id !== where.id.not
+          : true;
+    return (
+      matchesId &&
+      (!where.userId || address.userId === where.userId) &&
+      (where.isDefault === undefined || address.isDefault === where.isDefault)
+    );
+  };
+  const addressMock = {
+    findMany: (input: TestAddressInput) => {
+      const results = testAddresses
+        .filter((address) => matchesAddressWhere(address, input.where))
+        .sort(
+          (left, right) =>
+            Number(right.isDefault) - Number(left.isDefault) ||
+            right.createdAt.getTime() - left.createdAt.getTime(),
+        );
+      return Promise.resolve(results);
+    },
+    count: (input: TestAddressInput) =>
+      Promise.resolve(
+        testAddresses.filter((address) =>
+          matchesAddressWhere(address, input.where),
+        ).length,
+      ),
+    create: (input: { data: Omit<TestAddress, 'id' | 'createdAt'> }) => {
+      const address: TestAddress = {
+        ...input.data,
+        id: `address-${nextAddressId++}`,
+        createdAt: new Date(),
+      };
+      testAddresses.push(address);
+      return Promise.resolve(address);
+    },
+    updateMany: (input: TestAddressInput) => {
+      const matches = testAddresses.filter((address) =>
+        matchesAddressWhere(address, input.where),
+      );
+      for (const address of matches) {
+        Object.assign(address, input.data);
+      }
+      return Promise.resolve({ count: matches.length });
+    },
+    findFirst: (input: TestAddressInput) => {
+      const result = testAddresses
+        .filter((address) => matchesAddressWhere(address, input.where))
+        .sort(
+          (left, right) =>
+            right.createdAt.getTime() - left.createdAt.getTime() ||
+            right.id.localeCompare(left.id),
+        )[0];
+      return Promise.resolve(result ?? null);
+    },
+    update: (input: {
+      where: { id: string; userId: string };
+      data: Partial<TestAddress>;
+    }) => {
+      const address = testAddresses.find(
+        (entry) =>
+          entry.id === input.where.id && entry.userId === input.where.userId,
+      );
+      if (!address) {
+        return Promise.reject(new Error('Address not found'));
+      }
+      Object.assign(address, input.data);
+      return Promise.resolve(address);
+    },
+    delete: (input: { where: { id: string } }) => {
+      const index = testAddresses.findIndex(
+        (address) => address.id === input.where.id,
+      );
+      if (index < 0) {
+        return Promise.reject(new Error('Address not found'));
+      }
+      return Promise.resolve(testAddresses.splice(index, 1)[0]);
+    },
+  };
   const transactionMock = {
     user: {
       create: () => Promise.resolve(registrationUser),
@@ -91,6 +201,7 @@ describe('AppController (e2e)', () => {
       },
       deleteMany: () => Promise.resolve({ count: 1 }),
     },
+    address: addressMock,
   };
   const prismaMock = {
     user: {
@@ -119,10 +230,18 @@ describe('AppController (e2e)', () => {
       findUnique: () => Promise.resolve(storedToken),
       delete: () => Promise.resolve({}),
     },
+    address: addressMock,
     $transaction: <T>(
       callback: (transaction: typeof transactionMock) => Promise<T>,
     ) => callback(transactionMock),
   };
+  const accessTokenFor = (id: string, role = UserRole.USER) =>
+    app
+      .get(JwtService)
+      .sign(
+        { sub: id, email: `${id}@example.com`, role },
+        { secret: process.env.ACCESS_TOKEN_SECRET },
+      );
 
   beforeAll(async () => {
     const configuredUploadDirectory = process.env.UPLOAD_DIR;
@@ -185,6 +304,7 @@ describe('AppController (e2e)', () => {
 
   it('keeps own-profile routes private and restricts user management to admins', async () => {
     await request(app.getHttpServer()).get('/api/v1/users/me').expect(401);
+    await request(app.getHttpServer()).get('/api/v1/addresses').expect(401);
 
     const userToken = app.get(JwtService).sign(
       {
@@ -198,6 +318,162 @@ describe('AppController (e2e)', () => {
       .get('/api/v1/users')
       .set('Authorization', `Bearer ${userToken}`)
       .expect(403);
+  });
+
+  it('scopes addresses to the current user and makes the first one default', async () => {
+    testAddresses.splice(0);
+    const token = accessTokenFor('address-owner');
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        fullName: 'Address Owner',
+        phone: '01712345678',
+        division: 'Dhaka',
+        district: 'Dhaka',
+        upazila: 'Dhanmondi',
+        details: 'Road 1',
+      })
+      .expect(201);
+
+    expect(response.text).toContain('"isDefault":true');
+    expect(testAddresses[0].userId).toBe('address-owner');
+
+    await request(app.getHttpServer())
+      .get('/api/v1/addresses')
+      .set('Authorization', `Bearer ${accessTokenFor('other-user')}`)
+      .expect(200)
+      .expect(({ text }) => {
+        expect(text).toContain('"data":[]');
+      });
+  });
+
+  it('replaces the default atomically when a new default address is created', async () => {
+    testAddresses.splice(0);
+    const token = accessTokenFor('address-owner');
+    const first = {
+      fullName: 'Address Owner',
+      phone: '01712345678',
+      division: 'Dhaka',
+      district: 'Dhaka',
+      upazila: 'Dhanmondi',
+      details: 'First',
+    };
+    await request(app.getHttpServer())
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${token}`)
+      .send(first)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...first, details: 'Second', isDefault: true })
+      .expect(201);
+
+    expect(testAddresses).toHaveLength(2);
+    expect(testAddresses.filter((address) => address.isDefault)).toHaveLength(
+      1,
+    );
+    expect(testAddresses.find((address) => address.isDefault)?.details).toBe(
+      'Second',
+    );
+  });
+
+  it('enforces the ten-address limit and checks ownership on each address route', async () => {
+    testAddresses.splice(0);
+    const token = accessTokenFor('address-owner');
+    const input = {
+      fullName: 'Address Owner',
+      phone: '01712345678',
+      division: 'Dhaka',
+      district: 'Dhaka',
+      upazila: 'Dhanmondi',
+      details: 'Address',
+    };
+
+    for (let index = 0; index < 10; index += 1) {
+      await request(app.getHttpServer())
+        .post('/api/v1/addresses')
+        .set('Authorization', `Bearer ${token}`)
+        .send(input)
+        .expect(201);
+    }
+
+    await request(app.getHttpServer())
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${token}`)
+      .send(input)
+      .expect(409);
+
+    const foreignAddress: TestAddress = {
+      id: 'foreign-address',
+      userId: 'another-owner',
+      fullName: 'Other User',
+      phone: '01712345678',
+      division: 'Dhaka',
+      district: 'Dhaka',
+      upazila: 'Dhanmondi',
+      details: 'Private',
+      type: 'HOME',
+      isDefault: false,
+      createdAt: new Date(),
+    };
+    testAddresses.push(foreignAddress);
+    const otherToken = accessTokenFor('address-owner');
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/addresses/foreign-address')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ details: 'Changed' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch('/api/v1/addresses/foreign-address/default')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete('/api/v1/addresses/foreign-address')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404);
+  });
+
+  it('returns 404 for another user address and promotes the newest after deleting the default', async () => {
+    testAddresses.splice(0);
+    const oldAddress: TestAddress = {
+      id: 'old-address',
+      userId: 'address-owner',
+      fullName: 'Owner',
+      phone: '01712345678',
+      division: 'Dhaka',
+      district: 'Dhaka',
+      upazila: 'Dhanmondi',
+      details: 'Old remaining address',
+      type: 'HOME',
+      isDefault: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    const defaultAddress: TestAddress = {
+      ...oldAddress,
+      id: 'default-address',
+      details: 'Default address',
+      isDefault: true,
+      createdAt: new Date('2026-02-01T00:00:00.000Z'),
+    };
+    testAddresses.push(oldAddress, defaultAddress);
+    const token = accessTokenFor('address-owner');
+    const otherToken = accessTokenFor('another-owner');
+
+    await request(app.getHttpServer())
+      .delete('/api/v1/addresses/default-address')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete('/api/v1/addresses/default-address')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(testAddresses).toHaveLength(1);
+    expect(testAddresses[0].id).toBe('old-address');
+    expect(testAddresses[0].isDefault).toBe(true);
   });
 
   it('returns a safe own profile and rejects duplicate phone updates with 409', async () => {
