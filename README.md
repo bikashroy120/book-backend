@@ -84,6 +84,10 @@ available in the same route group.
 Staff manage shop records, counter-order totals, and POS dropdown options under
 `/api/v1/shops`; deleting a shop with orders suspends it instead.
 
+Customers can place, track, and cancel eligible orders, and submit order issues,
+through `/api/v1/orders`. Order creation snapshots prices and shipping details
+and updates stock within the same transaction.
+
 ## Compile and run the project
 
 ```bash

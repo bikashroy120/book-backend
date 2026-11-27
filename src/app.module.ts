@@ -21,6 +21,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { BooksModule } from './modules/books/books.module';
 import { StockModule } from './modules/stock/stock.module';
 import { ShopsModule } from './modules/shops/shops.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ShopsModule } from './modules/shops/shops.module';
     BooksModule,
     StockModule,
     ShopsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [
