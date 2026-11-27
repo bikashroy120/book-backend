@@ -24,6 +24,9 @@ import { ShopsModule } from './modules/shops/shops.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { CounterOrdersModule } from './modules/counter-orders/counter-orders.module';
 import { OrderManagementModule } from './modules/order-management/order-management.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { ManuscriptsModule } from './modules/manuscripts/manuscripts.module';
 
 @Module({
   imports: [
@@ -47,6 +50,9 @@ import { OrderManagementModule } from './modules/order-management/order-manageme
     OrdersModule,
     CounterOrdersModule,
     OrderManagementModule,
+    WishlistModule,
+    ReviewsModule,
+    ManuscriptsModule,
   ],
   controllers: [AppController],
   providers: [

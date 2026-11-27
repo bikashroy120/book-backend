@@ -7,8 +7,10 @@ import {
 import {
   Availability,
   BookStatus,
+  CoverType,
   OrderStatus,
   Prisma,
+  ReviewStatus,
   StockMovementType,
 } from '@prisma/client';
 import { pageMeta, pageSkip } from '../../common/utils/pagination';
@@ -249,6 +251,58 @@ export class BooksService {
     throw new ConflictException(
       'Could not allocate a unique book slug or SKU; try again',
     );
+  }
+
+  async createFromManuscript(
+    transaction: Prisma.TransactionClient,
+    editorId: string,
+    input: {
+      title: string;
+      authorId: string;
+      authorName: string;
+      categoryId: string;
+      publisherId: string;
+    },
+  ) {
+    await this.assertReferences(transaction, {
+      publisherId: input.publisherId,
+      categoryId: input.categoryId,
+      authorId: input.authorId,
+    });
+    const slug = await this.uniqueSlug(transaction, input.title);
+    const sku = await this.generateNextSku(transaction);
+    const zero = new Prisma.Decimal(0);
+    const created = await transaction.book.create({
+      data: {
+        title: input.title,
+        slug,
+        sku,
+        publisherId: input.publisherId,
+        categoryId: input.categoryId,
+        authorId: input.authorId,
+        authorName: input.authorName,
+        coverType: CoverType.PAPERBACK,
+        wholesalePrice: zero,
+        price: zero,
+        discountPercent: zero,
+        salePrice: zero,
+        royaltyRate: zero,
+        stock: 0,
+        alertLimit: 5,
+        availability: deriveAvailability(0, 5),
+        status: BookStatus.DRAFT,
+      },
+      include: bookDetailInclude,
+    });
+    await transaction.bookEditHistory.create({
+      data: {
+        bookId: created.id,
+        editorId,
+        action: 'CREATED',
+        changes: {},
+      },
+    });
+    return created;
   }
 
   async findAll(query: BooksQueryDTO) {
@@ -706,11 +760,19 @@ export class BooksService {
           select: storeBookSelect,
         })
       : [];
+    const ratingSummary = await this.prisma.review.aggregate({
+      where: { bookId: book.id, status: ReviewStatus.APPROVED },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
 
     return {
       ...book,
       relatedBooks,
-      rating: { averageRating: null, reviewCount: 0 },
+      rating: {
+        averageRating: ratingSummary._avg.rating ?? 0,
+        reviewCount: ratingSummary._count._all,
+      },
     };
   }
 

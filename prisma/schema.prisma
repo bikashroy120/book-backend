@@ -230,7 +230,6 @@ model User {
   repliedMessages     ContactMessage[]
   payments            Payment[]
 
-  manuscripts    Manuscript[]
   payoutRequests PayoutRequest[]
 }
 
@@ -456,6 +455,7 @@ model Review {
   moderatorId        String?
   moderator          User?          @relation("ReviewModerator", fields: [moderatorId], references: [id])
   moderatedAt        DateTime?
+  moderationNote     String?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   reviewReports      ReviewReport[]
@@ -653,8 +653,6 @@ model Manuscript {
   book   Book?   @relation(fields: [bookId], references: [id])
 
   feedbacks ManuscriptFeedback[]
-  user      User?                @relation(fields: [userId], references: [id])
-  userId    String?
 
   @@index([status])
   @@index([authorId])

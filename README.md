@@ -97,6 +97,18 @@ couriers and staff, collect payments, and review customer issues through
 `/api/v1/admin/orders` and `/api/v1/admin/order-issues`. Courier records are
 managed under `/api/v1/couriers`; order exports are available as UTF-8 CSV.
 
+Readers can manage their wishlist at `/api/v1/wishlist`, submit verified
+purchase reviews at `/api/v1/reviews`, and view their review status and counts.
+Approved book reviews and their rating summary are public under
+`/api/v1/store/books/:bookId/reviews`. Moderators manage review reports and
+approvals under `/api/v1/reviews/moderation`; authors can view approved reviews
+for their books at `/api/v1/reviews/author`.
+
+Approved authors who have accepted the publishing terms can submit manuscripts
+and respond to revision requests under `/api/v1/manuscripts/me`. Staff can
+review and assign manuscripts, exchange feedback, and convert approved
+manuscripts into draft books through `/api/v1/manuscripts`.
+
 ## Compile and run the project
 
 ```bash
