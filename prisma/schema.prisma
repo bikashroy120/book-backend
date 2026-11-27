@@ -417,13 +417,14 @@ model StockMovement {
   quantity     Int
   balanceAfter Int
   note         String?
-  // orderId      String?
-  // order        Order?            @relation(fields: [orderId], references: [id])
+  orderId      String?
+  order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
   createdById  String?
   createdBy    User?             @relation(fields: [createdById], references: [id])
   createdAt    DateTime          @default(now())
 
   @@index([bookId, createdAt])
+  @@index([orderId])
 }
 
 model Wishlist {
@@ -555,6 +556,7 @@ model Order {
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   orderItems           OrderItem[]
+  stockMovements       StockMovement[]
   orderStatusHistories OrderStatusHistory[]
   payments             Payment[]
   orderIssues          OrderIssue[]

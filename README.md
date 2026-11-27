@@ -77,6 +77,10 @@ titles are published automatically when their scheduled time arrives.
 Store book detail currently returns a null average rating and zero review count
 until review aggregation is connected.
 
+Staff manage inventory counts and stock movements under `/api/v1/stock`.
+Stock history, alerts, summaries, alert limits, and a UTF-8 CSV export are
+available in the same route group.
+
 ## Compile and run the project
 
 ```bash

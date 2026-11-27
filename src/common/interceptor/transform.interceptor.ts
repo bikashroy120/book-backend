@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -15,6 +16,8 @@ export interface Response<T> {
   meta?: unknown;
 }
 
+type TransformResult<T> = Response<T> | StreamableFile | Buffer | string;
+
 function isDataResponse<T>(
   value: unknown,
 ): value is { data: T; message?: unknown; meta?: unknown } {
@@ -24,14 +27,22 @@ function isDataResponse<T>(
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<
   T,
-  Response<T>
+  TransformResult<T>
 > {
   intercept(
     context: ExecutionContext,
     next: CallHandler,
-  ): Observable<Response<T>> {
+  ): Observable<TransformResult<T>> {
     return next.handle().pipe(
-      map((res: unknown): Response<T> => {
+      map((res: unknown): TransformResult<T> => {
+        if (
+          res instanceof StreamableFile ||
+          Buffer.isBuffer(res) ||
+          typeof res === 'string'
+        ) {
+          return res;
+        }
+
         const statusCode = context
           .switchToHttp()
           .getResponse<{ statusCode: number }>().statusCode;

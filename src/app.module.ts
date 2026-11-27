@@ -19,6 +19,7 @@ import { AuthorsModule } from './modules/authors/authors.module';
 import { PublishersModule } from './modules/publishers/publishers.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { BooksModule } from './modules/books/books.module';
+import { StockModule } from './modules/stock/stock.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { BooksModule } from './modules/books/books.module';
     PublishersModule,
     CategoriesModule,
     BooksModule,
+    StockModule,
   ],
   controllers: [AppController],
   providers: [
