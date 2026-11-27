@@ -65,6 +65,11 @@ Authors manage their profile and publishing-terms agreement at
 `/api/v1/authors/me`; staff can browse the directory and approved profiles are
 available at `/api/v1/public/authors/:id`.
 
+Staff can browse publishers and publisher book/inventory summaries at
+`/api/v1/publishers`; admins manage publisher records. The public
+`/api/v1/categories` endpoint returns the category tree, and staff can manage
+categories.
+
 ## Compile and run the project
 
 ```bash

@@ -16,6 +16,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
 import { AuthorsModule } from './modules/authors/authors.module';
+import { PublishersModule } from './modules/publishers/publishers.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { AuthorsModule } from './modules/authors/authors.module';
     UsersModule,
     AddressesModule,
     AuthorsModule,
+    PublishersModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [
