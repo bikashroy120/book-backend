@@ -17,6 +17,33 @@ export interface Response<T> {
 }
 
 type TransformResult<T> = Response<T> | StreamableFile | Buffer | string;
+const sensitiveFieldNames = new Set([
+  'password',
+  'passwordhash',
+  'token',
+  'tokenhash',
+  'verificationtoken',
+  'verificationtokenhash',
+]);
+
+function omitSensitiveFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(omitSensitiveFields);
+  }
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !sensitiveFieldNames.has(key.toLowerCase()))
+      .map(([key, nestedValue]) => [key, omitSensitiveFields(nestedValue)]),
+  );
+}
 
 function isDataResponse<T>(
   value: unknown,
@@ -51,15 +78,17 @@ export class TransformInterceptor<T> implements NestInterceptor<
             success: true,
             statusCode,
             message: typeof res.message === 'string' ? res.message : 'Success',
-            data: res.data,
-            ...(res.meta !== undefined ? { meta: res.meta } : {}),
+            data: omitSensitiveFields(res.data) as T,
+            ...(res.meta !== undefined
+              ? { meta: omitSensitiveFields(res.meta) }
+              : {}),
           };
         }
         return {
           success: true,
           statusCode,
           message: 'Success',
-          data: res as T,
+          data: omitSensitiveFields(res) as T,
         };
       }),
     );

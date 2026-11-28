@@ -137,6 +137,108 @@ $ npm run test:cov
 
 ## Deployment
 
+## Final setup and operations
+
+### Environment
+
+Copy `.env.example` to `.env` and set the required values:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `PORT` | No | HTTP port; defaults to `3000` |
+| `FRONTEND_URL` | Yes | The single allowed credentialed CORS origin |
+| `ACCESS_TOKEN_SECRET` | Yes | Secret used to sign access JWTs |
+| `ACCESS_TOKEN_EXPIRES` | No | Access-token lifetime; defaults to `15m` |
+| `REFRESH_TOKEN_SECRET` | Yes | Secret used to sign refresh JWTs |
+| `REFRESH_TOKEN_EXPIRES` | No | Refresh-token lifetime; defaults to `7d` |
+| `UPLOAD_DIR` | No | Local upload directory; defaults to `./uploads` |
+| `MAIL_FROM` | Yes | Sender label/address for outgoing mail |
+| `SEED_ADMIN_EMAIL` | Seed | Email for the idempotent Super Admin seed |
+| `SEED_ADMIN_PASSWORD` | Seed | Seed password; minimum 12 characters |
+| `NODE_ENV` | No | Swagger is disabled when set to `production` |
+
+Use distinct, randomly generated token secrets and do not commit `.env`.
+
+### Database and seed
+
+After configuring PostgreSQL and the environment:
+
+```powershell
+npm install
+npx prisma migrate deploy
+npx prisma db seed
+npm run start:dev
+```
+
+For local schema development, use `npx prisma migrate dev --name <change>`.
+The seed command creates or updates the Super Admin, nine categories, two
+publishers, default settings, and a courier. Set both seed variables before
+running it. The seed does not create sample orders or books.
+
+Swagger is available at `/api/docs` outside production. The API base path is
+`/api/v1`; the Postman collection is [docs/postman.json](./docs/postman.json).
+Requests are logged as structured JSON fields (method, path, status, duration);
+query strings, headers, and request bodies are intentionally excluded.
+
+### Module endpoint reference
+
+All endpoints below are relative to `/api/v1`. Unless marked **Public**, routes
+require a bearer token. Role names are `SUPER_ADMIN`, `ADMIN`, `MODERATOR`,
+`WORKER`, `AUTHOR`, and `USER`.
+
+| Module | Endpoints (method + path) | Access |
+| --- | --- | --- |
+| Health | `GET /health` | Public |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password`; `GET /auth/verify-email` | Public |
+| Uploads | `POST /uploads/image`, `/uploads/pdf`, `/uploads/manuscript` | Any authenticated user |
+| Users | `GET`, `PATCH /users/me`; `GET /users`, `/users/:id`, `/users/summary`; `POST /users`; `PATCH /users/:id` | Own profile; admin management; role changes Super Admin only |
+| Addresses | `GET`, `POST /addresses`; `PATCH`, `DELETE /addresses/:id` | Authenticated owner |
+| Authors | `POST /author-applications`; `GET`, `PATCH /authors/me`; `GET /authors`, `/authors/summary`, `/public/authors/:id` | User application; Author profile; staff/admin directory; approved public profiles |
+| Publishers | `GET /publishers`, `/publishers/:id`, `/publishers/:id/books`; `POST`, `PATCH`, `DELETE /publishers` | Staff read; Admin write |
+| Categories | `GET /categories`; `POST`, `PATCH`, `DELETE /categories/:id` | Public tree; staff management |
+| Books | `GET /books`, `/books/:id`, `/books/history`, `/books/mine`, `/store/books`, `/store/books/:slug`; `POST /books`; `PATCH /books/:id`, `/books/:id/status`; `DELETE /books/:id` | Staff; Author-owned books; store routes public |
+| Stock | `GET /stock`, `/stock/summary`, `/stock/history`, `/stock/alerts`, `/stock/export.csv`; `POST /stock/:bookId/movements`; `PATCH /stock/:bookId/alert-limit` | Staff |
+| Shops | `GET /shops`, `/shops/summary`, `/shops/options`, `/shops/:id`; `POST /shops`; `PATCH`, `DELETE /shops/:id` | Staff read/write; Admin delete |
+| Online orders | `POST /orders`, `/orders/me/:id/cancel`, `/orders/me/:id/issues`; `GET /orders/me`, `/orders/me/:id`, `/orders/me/:id/track`, `/orders/me/issues` | User |
+| Counter orders | `POST /counter-orders`, `/counter-orders/:id/payments`; `GET /counter-orders`, `/counter-orders/:id` | Staff |
+| Order management | `GET /admin/orders`, `/admin/orders/stats`, `/admin/orders/:id`, `/admin/orders/export.csv`, `/admin/order-issues`, `/couriers`; `PATCH /admin/orders/:id/status`, `/admin/orders/:id/courier`, `/admin/orders/:id/assign`, `/admin/order-issues/:id`; `POST`, `PATCH /couriers` | Staff |
+| Wishlist | `GET`, `POST /wishlist`, `DELETE /wishlist/:bookId` | User |
+| Reviews | `POST /reviews`, `/reviews/:id/report`; `GET /reviews/me`, `/reviews/moderation`, `/reviews/author`, `/store/books/:bookId/reviews`; `PATCH`, `DELETE /reviews/:id` | User, moderation roles, Author; public book reviews |
+| Manuscripts | `POST /manuscripts`, `/manuscripts/:id/feedback`, `/manuscripts/:id/convert-to-book`; `GET /manuscripts/me`, `/manuscripts`, `/manuscripts/:id`; `PATCH /manuscripts/:id/status`, `/manuscripts/:id/assign` | Author; staff; Admin convert |
+| Royalties & payouts | `GET /author/analytics`, `/author/analytics/monthly`, `/author/analytics/books`, `/payouts/me`, `/payouts`; `POST /payouts`, `/payouts/:id/cancel`; `PATCH /payouts/:id` | Author; Admin payout management |
+| Costs | `GET /costs`, `/costs/summary`, `/costs/books`, `/costs/export.csv`; `POST /costs/book`, `/costs/salary`, `/costs/marketing`; `PATCH`, `DELETE /costs/:id` | Admin |
+| Messages | `POST /contact`; `GET /messages`, `/messages/:id`; `PATCH /messages/:id/status`; `POST /messages/:id/reply` | Public contact; staff inbox |
+| Magazines | `POST /magazines`; `GET /magazines`, `/magazines/me`, `/magazines/:id`; `PATCH /magazines/:id`, `/magazines/:id/review`; `DELETE /magazines/:id` | User submission; staff review; published public reads |
+| Settings | `GET /settings/public`, `/settings/:key`; `PUT /settings/:key` | Public settings; Admin; secrets Super Admin only |
+| Dashboard | `GET /dashboard` | Role-specific authenticated data |
+| Reports | `GET /reports/sales`, `/reports/top-books`, `/reports/stock-valuation`, `/reports/author-royalties`, `/reports/costs` and `.csv` variants | Admin |
+
+### Documented business assumptions
+
+- **ASSUMPTION — Counter commission:** a shop's commission is subtracted from
+  the order subtotal as a discount to calculate the shop's payable total.
+- **ASSUMPTION — Dashboard profit:** monthly profit is completed/paid order
+  revenue less the month's recorded `CostEntry` total.
+- Delivery-charge defaults are 60 inside Dhaka and 120 outside Dhaka; the
+  `delivery_charges` setting overrides these values.
+- A payout's available balance is earned royalties minus pending, approved, and
+  paid payout requests.
+
+### Verification
+
+```powershell
+npm run build
+npm run lint
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
+```
+
+The Supertest E2E suite uses isolated mocked providers by default; service unit
+tests cover the business rules. For database integration validation, configure
+a disposable PostgreSQL test database and apply migrations to that database
+only.
+
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:

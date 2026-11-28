@@ -1,0 +1,312 @@
+{
+  "info": {
+    "_postman_id": "9778d3b4-1912-4c5a-9c2b-45d2a0a90744",
+    "name": "Hosonta Prokashon API",
+    "description": "Core workflow collection for the Hosonta Prokashon backend. Set baseUrl and accessToken in the collection variables before calling private routes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "bookId", "value": "" },
+    { "key": "bookSlug", "value": "" },
+    { "key": "addressId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "shopId", "value": "" },
+    { "key": "payoutId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health and public store",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Public settings",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/settings/public"
+          }
+        },
+        {
+          "name": "Category tree",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/categories"
+          }
+        },
+        {
+          "name": "Published books",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/store/books?page=1&limit=20&sort=newest"
+          }
+        },
+        {
+          "name": "Store book detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/store/books/{{bookSlug}}"
+          }
+        },
+        {
+          "name": "Public reviews",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/store/books/{{bookId}}/reviews?page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Reader Name\",\"email\":\"reader@example.com\",\"phone\":\"01712345678\",\"password\":\"Bookreader123\",\"language\":\"bn\"}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"identifier\":\"reader@example.com\",\"password\":\"Bookreader123\"}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Refresh access token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\":\"{{refreshToken}}\"}"
+            },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"reader@example.com\"}"
+            },
+            "url": "{{baseUrl}}/auth/forgot-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customer",
+      "item": [
+        {
+          "name": "My profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "List addresses",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/addresses"
+          }
+        },
+        {
+          "name": "Create address",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Reader Name\",\"phone\":\"01712345678\",\"division\":\"Dhaka\",\"district\":\"Dhaka\",\"upazila\":\"Dhanmondi\",\"details\":\"Road 1, House 2\",\"isDefault\":true}"
+            },
+            "url": "{{baseUrl}}/addresses"
+          }
+        },
+        {
+          "name": "Create online order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"bookId\":\"{{bookId}}\",\"quantity\":1}],\"addressId\":\"{{addressId}}\",\"paymentMethod\":\"COD\"}"
+            },
+            "url": "{{baseUrl}}/orders"
+          }
+        },
+        {
+          "name": "My orders",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/orders/me?page=1&limit=20&tab=all"
+          }
+        },
+        {
+          "name": "Cancel order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/orders/me/{{orderId}}/cancel"
+          }
+        },
+        {
+          "name": "Add wishlist item",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/wishlist/{{bookId}}"
+          }
+        },
+        {
+          "name": "Submit review",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"bookId\":\"{{bookId}}\",\"rating\":5,\"title\":\"Enjoyed it\",\"comment\":\"A thoughtful and enjoyable book.\"}"
+            },
+            "url": "{{baseUrl}}/reviews"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff operations",
+      "item": [
+        {
+          "name": "Book inventory",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/stock?page=1&limit=20&tab=all"
+          }
+        },
+        {
+          "name": "Create counter order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"shopId\":\"{{shopId}}\",\"items\":[{\"bookId\":\"{{bookId}}\",\"quantity\":1}],\"paidAmount\":0,\"paymentMethod\":\"CASH\"}"
+            },
+            "url": "{{baseUrl}}/counter-orders"
+          }
+        },
+        {
+          "name": "Admin order list",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/orders?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard"
+          }
+        },
+        {
+          "name": "Reports sales CSV",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reports/sales.csv?from=2026-01-01&to=2026-12-31"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Author",
+      "item": [
+        {
+          "name": "Author analytics",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/author/analytics"
+          }
+        },
+        {
+          "name": "Request payout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"amount\":500,\"method\":\"BKASH\",\"accountNo\":\"01712345678\"}"
+            },
+            "url": "{{baseUrl}}/payouts"
+          }
+        },
+        {
+          "name": "My payouts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/payouts/me?page=1&limit=20&tab=all"
+          }
+        },
+        {
+          "name": "Submit manuscript",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"A Sample Manuscript\",\"genre\":\"Novel\",\"submitType\":\"TEXT\",\"textContent\":\"A manuscript text of at least five hundred characters is required here. Add the complete manuscript content before sending this request.\"}"
+            },
+            "url": "{{baseUrl}}/manuscripts"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public contact",
+      "item": [
+        {
+          "name": "Send contact message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Visitor\",\"email\":\"visitor@example.com\",\"subject\":\"Question\",\"message\":\"Please contact me about publishing.\"}"
+            },
+            "url": "{{baseUrl}}/contact"
+          }
+        }
+      ]
+    }
+  ]
+}

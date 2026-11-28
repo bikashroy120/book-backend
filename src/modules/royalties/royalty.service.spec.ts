@@ -1,4 +1,5 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BadRequestException } from '@nestjs/common';
 import {
   ApprovalStatus,
   OrderStatus,
@@ -10,6 +11,59 @@ import { PrismaService } from '../../core/database/prisma.service';
 import { RoyaltyService } from './royalty.service';
 
 describe('RoyaltyService', () => {
+  it('enforces the configured minimum and available payout balance', async () => {
+    const payoutCreate = jest.fn().mockResolvedValue({
+      id: 'payout-1',
+      code: 'PR-1001',
+      amount: new Prisma.Decimal(500),
+      status: PayoutStatus.PENDING,
+    });
+    const transaction = {
+      authorProfile: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'author-1',
+          status: ApprovalStatus.APPROVED,
+        }),
+      },
+      setting: { findUnique: jest.fn().mockResolvedValue(null) },
+      royaltyEntry: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { amount: new Prisma.Decimal(400) } }),
+      },
+      payoutRequest: {
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { amount: new Prisma.Decimal(0) } }),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: payoutCreate,
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(
+        (callback: (tx: typeof transaction) => Promise<unknown>) =>
+          callback(transaction),
+      ),
+    } as unknown as PrismaService;
+    const service = new RoyaltyService(prisma, {} as EventEmitter2);
+
+    await expect(
+      service.requestPayout('author-user', {
+        amount: 499,
+        method: 'BKASH',
+        accountNo: '01712345678',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.requestPayout('author-user', {
+        amount: 500,
+        method: 'BKASH',
+        accountNo: '01712345678',
+      }),
+    ).rejects.toThrow('Payout amount exceeds the available balance');
+    expect(payoutCreate).not.toHaveBeenCalled();
+  });
+
   it('creates royalty snapshots idempotently for completed order items', async () => {
     const transaction = {
       order: {

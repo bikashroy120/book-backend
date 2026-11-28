@@ -18,4 +18,34 @@ describe('TransformInterceptor raw responses', () => {
       ).resolves.toBe(rawResponse);
     },
   );
+
+  it('omits password and token hashes from JSON response data', async () => {
+    const handler: CallHandler = {
+      handle: () =>
+        of({
+          id: 'user-1',
+          password: 'password-hash',
+          nested: {
+            token: 'verification-token-hash',
+            tokenHash: 'another-token-hash',
+            accessToken: 'signed-access-token',
+          },
+        }),
+    };
+    const contextWithStatus = {
+      switchToHttp: () => ({ getResponse: () => ({ statusCode: 200 }) }),
+    } as ExecutionContext;
+
+    await expect(
+      firstValueFrom(interceptor.intercept(contextWithStatus, handler)),
+    ).resolves.toEqual({
+      success: true,
+      statusCode: 200,
+      message: 'Success',
+      data: {
+        id: 'user-1',
+        nested: { accessToken: 'signed-access-token' },
+      },
+    });
+  });
 });

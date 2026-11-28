@@ -451,6 +451,14 @@ describe('AppController (e2e)', () => {
     address: addressMock,
     authorApplication: applicationMock,
     authorProfile: authorProfileMock,
+    royaltyEntry: {
+      groupBy: () => Promise.resolve([]),
+    },
+    payoutRequest: {
+      groupBy: () => Promise.resolve([]),
+      count: () => Promise.resolve(0),
+      aggregate: () => Promise.resolve({ _sum: { amount: null } }),
+    },
     $transaction: <T>(
       callback: (transaction: typeof transactionMock) => Promise<T>,
     ) => callback(transactionMock),
