@@ -230,6 +230,7 @@ model User {
   repliedMessages     ContactMessage[]
   payments            Payment[]
 
+  @@index([role])
 }
 
 model VerificationToken {
@@ -384,6 +385,7 @@ model Book {
   @@index([status, categoryId])
   @@index([publisherId])
   @@index([authorId])
+  @@index([authorId, status])
 }
 
 model BookImage {
@@ -461,6 +463,7 @@ model Review {
 
   @@unique([bookId, userId])
   @@index([status])
+  @@index([bookId, status, createdAt])
 }
 
 model ReviewReport {
@@ -561,6 +564,11 @@ model Order {
   orderIssues          OrderIssue[]
 
   @@index([channel, status])
+  @@index([channel, placedAt])
+  @@index([status, placedAt])
+  @@index([paymentStatus, placedAt])
+  @@index([customerId, status])
+  @@index([staffId, placedAt])
   @@index([customerId])
   @@index([shopId])
   @@index([placedAt])
@@ -581,6 +589,7 @@ model OrderItem {
 
   @@index([orderId])
   @@index([bookId])
+  @@index([bookId, orderId])
 }
 
 model OrderStatusHistory {
@@ -691,6 +700,7 @@ model RoyaltyEntry {
 
   @@index([authorId, status])
   @@index([bookId])
+  @@index([authorId, createdAt])
 }
 
 model PayoutRequest {
@@ -738,6 +748,7 @@ model CostEntry {
 
   @@index([category, date])
   @@index([bookId])
+  @@index([date])
 }
 
 // =====================================================================

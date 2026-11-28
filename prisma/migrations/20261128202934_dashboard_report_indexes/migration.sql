@@ -1,0 +1,11 @@
+CREATE INDEX "User_role_idx" ON "User"("role");
+CREATE INDEX "Book_authorId_status_idx" ON "Book"("authorId", "status");
+CREATE INDEX "Review_bookId_status_createdAt_idx" ON "Review"("bookId", "status", "createdAt");
+CREATE INDEX "Order_channel_placedAt_idx" ON "Order"("channel", "placedAt");
+CREATE INDEX "Order_status_placedAt_idx" ON "Order"("status", "placedAt");
+CREATE INDEX "Order_paymentStatus_placedAt_idx" ON "Order"("paymentStatus", "placedAt");
+CREATE INDEX "Order_customerId_status_idx" ON "Order"("customerId", "status");
+CREATE INDEX "Order_staffId_placedAt_idx" ON "Order"("staffId", "placedAt");
+CREATE INDEX "OrderItem_bookId_orderId_idx" ON "OrderItem"("bookId", "orderId");
+CREATE INDEX "RoyaltyEntry_authorId_createdAt_idx" ON "RoyaltyEntry"("authorId", "createdAt");
+CREATE INDEX "CostEntry_date_idx" ON "CostEntry"("date");

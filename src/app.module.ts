@@ -31,6 +31,9 @@ import { RoyaltiesModule } from './modules/royalties/royalties.module';
 import { CostsModule } from './modules/costs/costs.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { MagazinesModule } from './modules/magazines/magazines.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -61,6 +64,9 @@ import { MagazinesModule } from './modules/magazines/magazines.module';
     CostsModule,
     MessagesModule,
     MagazinesModule,
+    DashboardModule,
+    ReportsModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [
