@@ -24,7 +24,8 @@
     { "key": "addressId", "value": "" },
     { "key": "orderId", "value": "" },
     { "key": "shopId", "value": "" },
-    { "key": "payoutId", "value": "" }
+    { "key": "payoutId", "value": "" },
+    { "key": "uploadTicket", "value": "" }
   ],
   "item": [
     {
@@ -123,6 +124,69 @@
               "raw": "{\"email\":\"reader@example.com\"}"
             },
             "url": "{{baseUrl}}/auth/forgot-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Create signed Cloudinary upload parameters",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"type\":\"manuscript\",\"format\":\"pdf\"}"
+            },
+            "description": "Use the returned fields to upload the file directly to the returned Cloudinary URL, then confirm it below. Requires a configured signed Cloudinary preset.",
+            "url": "{{baseUrl}}/uploads/signature"
+          }
+        },
+        {
+          "name": "Confirm signed Cloudinary upload",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ticket\":\"{{uploadTicket}}\"}"
+            },
+            "url": "{{baseUrl}}/uploads/confirm"
+          }
+        },
+        {
+          "name": "Upload image to Cloudinary",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/uploads/image"
+          }
+        },
+        {
+          "name": "Upload PDF to Cloudinary",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/uploads/pdf"
+          }
+        },
+        {
+          "name": "Upload manuscript to Cloudinary",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/uploads/manuscript"
           }
         }
       ]

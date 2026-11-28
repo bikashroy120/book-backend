@@ -10,4 +10,7 @@ process.env.ACCESS_TOKEN_SECRET =
 process.env.REFRESH_TOKEN_SECRET =
   'test-refresh-token-secret-at-least-thirty-two-characters';
 process.env.MAIL_FROM = 'test@example.com';
+process.env.CLOUDINARY_CLOUD_NAME = 'test-cloud';
+process.env.CLOUDINARY_API_KEY = 'test-api-key';
+process.env.CLOUDINARY_API_SECRET = 'test-api-secret';
 process.env.UPLOAD_DIR = join(tmpdir(), `hosonta-uploads-${randomUUID()}`);

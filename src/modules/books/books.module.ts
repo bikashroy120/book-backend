@@ -7,6 +7,6 @@ import { StoreBooksController } from './store-books.controller';
 @Module({
   controllers: [BooksController, StoreBooksController],
   providers: [BooksService, BookSchedulerService],
-  exports: [BooksService],
+  exports: [BookSchedulerService, BooksService],
 })
 export class BooksModule {}

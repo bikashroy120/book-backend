@@ -12,6 +12,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from '../src/app.module';
+import { CloudinaryUploadService } from '../src/core/storage/cloudinary-upload.service';
 import { PrismaService } from '../src/core/database/prisma.service';
 import { TransformInterceptor } from '../src/common/interceptor/transform.interceptor';
 import { rm } from 'node:fs/promises';
@@ -490,6 +491,33 @@ describe('AppController (e2e)', () => {
           sentMails.push(message);
           return Promise.resolve();
         },
+      })
+      .overrideProvider(CloudinaryUploadService)
+      .useValue({
+        createDirectUploadSignature: (
+          type: string,
+          userId: string,
+          format?: string,
+        ) =>
+          Promise.resolve({
+            uploadUrl: 'https://api.cloudinary.com/test/upload',
+            fields: { signature: 'test-signature' },
+            ticket: `ticket-${type}-${format ?? 'default'}-${userId}`,
+          }),
+        confirmDirectUpload: (ticket: string, userId: string) =>
+          Promise.resolve({
+            url: 'https://res.cloudinary.com/test-cloud/raw/upload/confirmed.pdf',
+            filename: `hosonta/files/${ticket}-${userId}.pdf`,
+            size: 1024,
+            mimeType: 'application/pdf',
+          }),
+        uploadFile: (buffer: Buffer, originalName: string, mimeType: string) =>
+          Promise.resolve({
+            url: `https://res.cloudinary.com/test-cloud/${mimeType.startsWith('image/') ? 'image' : 'raw'}/upload/v1/hosonta/${mimeType.startsWith('image/') ? 'images/test-image' : `files/${originalName}`}`,
+            filename: `hosonta/${mimeType.startsWith('image/') ? 'images/test-image' : `files/${originalName}`}`,
+            size: buffer.length,
+            mimeType,
+          }),
       })
       .compile();
 
@@ -1119,7 +1147,7 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('stores accepted images under random names and serves them publicly', async () => {
+  it('uploads accepted images to Cloudinary and returns its secure URL', async () => {
     const token = app.get(JwtService).sign(
       {
         sub: 'test-user',
@@ -1138,12 +1166,74 @@ describe('AppController (e2e)', () => {
       .expect(201);
 
     expect(response.text).toMatch(/"mimeType":"image\/png"/);
-    const match = /"url":"(\/uploads\/[a-f0-9-]+\.png)"/.exec(response.text);
-    if (!match) {
-      throw new Error('Upload response did not contain the stored file URL');
-    }
+    expect(response.text).toContain(
+      '"url":"https://res.cloudinary.com/test-cloud/image/upload/v1/hosonta/images/test-image"',
+    );
+    expect(response.text).toContain('"filename":"hosonta/images/test-image"');
+  });
 
-    await request(app.getHttpServer()).get(match[1]).expect(200);
+  it('uploads PDF and DOCX files to Cloudinary as raw assets', async () => {
+    const token = app.get(JwtService).sign(
+      {
+        sub: 'test-user',
+        email: 'test@example.com',
+        role: UserRole.USER,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+    const pdfResponse = await request(app.getHttpServer())
+      .post('/api/v1/uploads/pdf')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('pdf content'), {
+        filename: 'sample.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    expect(pdfResponse.text).toContain('"mimeType":"application/pdf"');
+    expect(pdfResponse.text).toContain('/raw/upload/');
+
+    const manuscriptResponse = await request(app.getHttpServer())
+      .post('/api/v1/uploads/manuscript')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('docx content'), {
+        filename: 'sample.docx',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
+      .expect(201);
+    expect(manuscriptResponse.text).toContain(
+      '"filename":"hosonta/files/sample.docx"',
+    );
+    expect(manuscriptResponse.text).toContain('/raw/upload/');
+  });
+
+  it('supports signed direct uploads and confirms the authenticated user asset', async () => {
+    const token = app.get(JwtService).sign(
+      {
+        sub: 'test-user',
+        email: 'test@example.com',
+        role: UserRole.USER,
+      },
+      { secret: process.env.ACCESS_TOKEN_SECRET },
+    );
+
+    const signatureResponse = await request(app.getHttpServer())
+      .post('/api/v1/uploads/signature')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ type: 'manuscript', format: 'pdf' })
+      .expect(201);
+    expect(signatureResponse.text).toContain(
+      '"ticket":"ticket-manuscript-pdf-test-user"',
+    );
+    expect(signatureResponse.text).toContain('"signature":"test-signature"');
+
+    const confirmationResponse = await request(app.getHttpServer())
+      .post('/api/v1/uploads/confirm')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ticket: 'ticket-manuscript-pdf-test-user' })
+      .expect(201);
+    expect(confirmationResponse.text).toContain('"mimeType":"application/pdf"');
+    expect(confirmationResponse.text).toContain('"size":1024');
   });
 
   it('rejects uploads when the extension does not match the MIME type', async () => {

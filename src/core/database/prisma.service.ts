@@ -11,7 +11,11 @@ export class PrismaService
 {
   constructor(configServices: ConfigService) {
     const connectionString = configServices.get<string>('DATABASE_URL');
-    const pool = new Pool({ connectionString });
+    const configuredMax = configServices.get<number>('DATABASE_POOL_MAX');
+    const pool = new Pool({
+      connectionString,
+      max: configuredMax ?? (process.env.VERCEL ? 1 : 10),
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }

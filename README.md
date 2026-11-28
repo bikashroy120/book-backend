@@ -35,14 +35,16 @@ Copy-Item .env.example .env
 ```
 
 Set `DATABASE_URL`, `FRONTEND_URL`, `ACCESS_TOKEN_SECRET`,
-`REFRESH_TOKEN_SECRET`, and `MAIL_FROM` in `.env` before starting the API.
+`REFRESH_TOKEN_SECRET`, `MAIL_FROM`, and the Cloudinary credentials in `.env`
+before starting the API.
 Token secrets should be unique, random values. `PORT`, token expiration values,
 and `UPLOAD_DIR` have defaults documented in `.env.example`.
 
 The API is served under `/api/v1`. `GET /api/v1/health` is public. Authenticated
 users can upload images, PDFs, and manuscripts at `/api/v1/uploads/image`,
-`/api/v1/uploads/pdf`, and `/api/v1/uploads/manuscript`; uploaded files are
-available under `/uploads`.
+`/api/v1/uploads/pdf`, and `/api/v1/uploads/manuscript`. All new uploads go to
+Cloudinary: images use image assets, and PDF/DOCX files use raw assets. The
+`/uploads` static route remains available for legacy local files.
 
 Public authentication endpoints are under `/api/v1/auth`: `POST /register`,
 `POST /login`, `POST /refresh`, `GET /verify-email`, `POST /forgot-password`,
@@ -137,6 +139,42 @@ $ npm run test:cov
 
 ## Deployment
 
+### Vercel
+
+This repository includes a Vercel function entry point in `api/index.ts`; it
+shares the same Nest application configuration as the VPS entry point. Import
+the repository into Vercel with the repository root as the project root and
+leave the build command as `npm run build`.
+
+Configure the required environment variables from `.env.example` in Vercel
+for Production and Preview. Use a PostgreSQL provider's pooled connection URL
+when available; the Vercel runtime defaults to a single database connection
+per instance. `DATABASE_POOL_MAX` can override that value (1–100).
+
+Set `CRON_SECRET` to a random value of at least 32 characters. Vercel sends it
+as a bearer token when invoking the protected book-publishing cron function.
+The checked-in schedule runs once per day so it is valid on Vercel Hobby; Hobby
+does not support more frequent cron jobs. On Pro, change the cron expression in
+`vercel.json` to `* * * * *` to match the existing once-per-minute VPS
+scheduler. In-process scheduling is disabled automatically on Vercel.
+
+Vercel's default function request limit is 4.5 MB. To support the existing
+5/10/25 MB upload limits without sending large files through a function, create
+three **signed** Cloudinary upload presets with the matching allowed formats
+and maximum sizes, and set `CLOUDINARY_IMAGE_UPLOAD_PRESET`,
+`CLOUDINARY_MANUSCRIPT_UPLOAD_PRESET`, and `CLOUDINARY_PDF_UPLOAD_PRESET`.
+Authenticated clients request upload parameters at `POST /api/v1/uploads/signature`
+with `{ "type": "image" }`, `{ "type": "pdf" }`, or
+`{ "type": "manuscript", "format": "pdf" }` / `"docx"`. The client uploads the
+file to the returned Cloudinary URL with the returned fields, then posts the
+returned ticket to `POST /api/v1/uploads/confirm`. Confirmation verifies the
+asset type and size against the existing endpoint limits. The multipart upload
+routes remain available for VPS and small Vercel uploads.
+
+For VPS, keep using `npm run build` and `npm run start:prod`; the existing
+in-process scheduler and `/uploads` static directory remain enabled outside
+Vercel.
+
 ## Final setup and operations
 
 ### Environment
@@ -154,6 +192,14 @@ Copy `.env.example` to `.env` and set the required values:
 | `REFRESH_TOKEN_EXPIRES` | No | Refresh-token lifetime; defaults to `7d` |
 | `UPLOAD_DIR` | No | Local upload directory; defaults to `./uploads` |
 | `MAIL_FROM` | Yes | Sender label/address for outgoing mail |
+| `CLOUDINARY_CLOUD_NAME` | Yes | Cloudinary cloud name for all uploads |
+| `CLOUDINARY_API_KEY` | Yes | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Yes | Cloudinary API secret |
+| `CLOUDINARY_IMAGE_UPLOAD_PRESET` | Vercel direct uploads | Signed preset restricted to JPG/JPEG/PNG/WEBP and 5 MB |
+| `CLOUDINARY_PDF_UPLOAD_PRESET` | Vercel direct uploads | Signed preset restricted to PDF and 25 MB |
+| `CLOUDINARY_MANUSCRIPT_UPLOAD_PRESET` | Vercel direct uploads | Signed preset restricted to PDF/DOCX and 10 MB |
+| `DATABASE_POOL_MAX` | No | PostgreSQL pool max; defaults to 1 on Vercel and 10 elsewhere |
+| `CRON_SECRET` | Vercel | At least 32 characters; authorizes scheduled-book publication |
 | `SEED_ADMIN_EMAIL` | Seed | Email for the idempotent Super Admin seed |
 | `SEED_ADMIN_PASSWORD` | Seed | Seed password; minimum 12 characters |
 | `NODE_ENV` | No | Swagger is disabled when set to `production` |
@@ -191,7 +237,7 @@ require a bearer token. Role names are `SUPER_ADMIN`, `ADMIN`, `MODERATOR`,
 | --- | --- | --- |
 | Health | `GET /health` | Public |
 | Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password`; `GET /auth/verify-email` | Public |
-| Uploads | `POST /uploads/image`, `/uploads/pdf`, `/uploads/manuscript` | Any authenticated user |
+| Uploads | `POST /uploads/image`, `/uploads/pdf`, `/uploads/manuscript`, `/uploads/signature`, `/uploads/confirm` | Any authenticated user |
 | Users | `GET`, `PATCH /users/me`; `GET /users`, `/users/:id`, `/users/summary`; `POST /users`; `PATCH /users/:id` | Own profile; admin management; role changes Super Admin only |
 | Addresses | `GET`, `POST /addresses`; `PATCH`, `DELETE /addresses/:id` | Authenticated owner |
 | Authors | `POST /author-applications`; `GET`, `PATCH /authors/me`; `GET /authors`, `/authors/summary`, `/public/authors/:id` | User application; Author profile; staff/admin directory; approved public profiles |

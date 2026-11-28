@@ -1,17 +1,20 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Inject } from '@nestjs/common';
 import type { Request } from 'express';
 import multer from 'multer';
 import { extname } from 'node:path';
-import { STORAGE_SERVICE } from './storage.service';
-import type { StorageService } from './storage.service';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthUser } from '../../common/types/auth-user';
+import { ConfirmDirectUploadDTO } from './dto/confirm-direct-upload.dto';
+import { CreateDirectUploadSignatureDTO } from './dto/create-direct-upload-signature.dto';
+import { CloudinaryUploadService } from './cloudinary-upload.service';
 
 interface AllowedFileType {
   mimeType: string;
@@ -60,55 +63,81 @@ const noExtraFields = { files: 1, fields: 0, parts: 1 };
 
 @Controller('uploads')
 export class UploadController {
-  constructor(
-    @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
-  ) {}
+  constructor(private readonly cloudinary: CloudinaryUploadService) {}
+
+  @Post('signature')
+  createDirectUploadSignature(
+    @CurrentUser() user: AuthUser,
+    @Body() input: CreateDirectUploadSignatureDTO,
+  ) {
+    return this.cloudinary.createDirectUploadSignature(
+      input.type,
+      user.id,
+      input.format,
+    );
+  }
+
+  @Post('confirm')
+  confirmDirectUpload(
+    @CurrentUser() user: AuthUser,
+    @Body() input: ConfirmDirectUploadDTO,
+  ) {
+    return this.cloudinary.confirmDirectUpload(input.ticket, user.id);
+  }
 
   @Post('image')
   @UseInterceptors(
     FileInterceptor('file', {
+      storage: multer.memoryStorage(),
       limits: { ...noExtraFields, fileSize: 5 * 1024 * 1024 },
       fileFilter: createFileFilter(imageTypes),
     }),
   )
-  uploadImage(@UploadedFile() file?: Express.Multer.File) {
-    return this.toUploadResponse(file);
-  }
-
-  @Post('pdf')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { ...noExtraFields, fileSize: 25 * 1024 * 1024 },
-      fileFilter: createFileFilter(pdfTypes),
-    }),
-  )
-  uploadPdf(@UploadedFile() file?: Express.Multer.File) {
-    return this.toUploadResponse(file);
-  }
-
-  @Post('manuscript')
-  @UseInterceptors(
-    FileInterceptor('file', {
-      limits: { ...noExtraFields, fileSize: 10 * 1024 * 1024 },
-      fileFilter: createFileFilter(manuscriptTypes),
-    }),
-  )
-  uploadManuscript(@UploadedFile() file?: Express.Multer.File) {
-    return this.toUploadResponse(file);
-  }
-
-  private toUploadResponse(file?: Express.Multer.File) {
+  async uploadImage(@UploadedFile() file?: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException(
         'File is missing or does not match the allowed type and extension',
       );
     }
 
-    return {
-      url: this.storage.getPublicUrl(file.filename),
-      filename: file.filename,
-      size: file.size,
-      mimeType: file.mimetype,
-    };
+    return this.uploadToCloudinary(file);
+  }
+
+  @Post('pdf')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: multer.memoryStorage(),
+      limits: { ...noExtraFields, fileSize: 25 * 1024 * 1024 },
+      fileFilter: createFileFilter(pdfTypes),
+    }),
+  )
+  uploadPdf(@UploadedFile() file?: Express.Multer.File) {
+    return this.uploadToCloudinary(file);
+  }
+
+  @Post('manuscript')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: multer.memoryStorage(),
+      limits: { ...noExtraFields, fileSize: 10 * 1024 * 1024 },
+      fileFilter: createFileFilter(manuscriptTypes),
+    }),
+  )
+  uploadManuscript(@UploadedFile() file?: Express.Multer.File) {
+    return this.uploadToCloudinary(file);
+  }
+
+  private uploadToCloudinary(file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException(
+        'File is missing or does not match the allowed type and extension',
+      );
+    }
+
+    return this.cloudinary.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
   }
 }

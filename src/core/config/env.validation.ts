@@ -3,8 +3,10 @@ import {
   IsInt,
   Matches,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
+  Max,
   Min,
   validateSync,
 } from 'class-validator';
@@ -18,6 +20,13 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   PORT = 3000;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  DATABASE_POOL_MAX?: number;
 
   @IsUrl({
     protocols: ['http', 'https'],
@@ -51,6 +60,23 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   MAIL_FROM!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_CLOUD_NAME!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_API_KEY!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CLOUDINARY_API_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^.{32,}$/)
+  CRON_SECRET?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -64,6 +90,10 @@ export function validate(config: Record<string, unknown>) {
   if (errors.length > 0) {
     const invalidFields = errors.map((error) => error.property).join(', ');
     throw new Error(`Invalid environment configuration: ${invalidFields}`);
+  }
+
+  if (process.env.VERCEL && !validatedConfig.CRON_SECRET) {
+    throw new Error('CRON_SECRET is required when running on Vercel');
   }
 
   return validatedConfig;

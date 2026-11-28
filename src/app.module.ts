@@ -35,12 +35,14 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
+const scheduleModule = process.env.VERCEL ? [] : [ScheduleModule.forRoot()];
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate }),
     JwtModule.register({ global: true }),
     EventEmitterModule.forRoot(),
-    ScheduleModule.forRoot(),
+    ...scheduleModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     PrismaModule,
     MailModule,
